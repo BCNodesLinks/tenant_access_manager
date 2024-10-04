@@ -2,7 +2,7 @@
 /*
 Plugin Name: Tenant Access Manager
 Description: Allows admin to create tenants with access to specific resources and restricts site access until email confirmation.
-Version: 1.7
+Version: 1.8
 Author: Ben Campbell
 */
 
