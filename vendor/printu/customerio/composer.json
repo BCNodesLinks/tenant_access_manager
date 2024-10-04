@@ -1,0 +1,44 @@
+{
+    "name": "printu/customerio",
+    "description": "PHP API for Customer.io",
+    "keywords": [
+        "http",
+        "rest",
+        "customer.io",
+        "customerio",
+        "api",
+        "client"
+    ],
+    "type": "library",
+    "license": "MIT",
+    "homepage": "http://customer.io/",
+    "authors": [
+        {
+            "name": "Paweł Krzaczkowski",
+            "email": "pawel@freshmind.pl",
+            "homepage": "https://github.com/krzaczek"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {
+        "php": "~7.3|^8.0",
+        "ext-json": "*",
+        "guzzlehttp/guzzle": "~7.2"
+    },
+    "conflict": {
+        "userscape/customerio": "*"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "~9.5"
+    },
+    "autoload": {
+        "psr-4": {
+            "Customerio\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Customerio\\Tests\\": "tests/"
+        }
+    }
+}

@@ -1,0 +1,16 @@
+{
+    "name": "bennl/tenant-access-manager",
+    "description": "Package for NL TAM",
+    "type": "wordpress-plugin",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Ben Campbell",
+            "email": "ben.campbell@nodeslinks.com"
+        }
+    ],
+    "minimum-stability": "stable",
+    "require": {
+        "printu/customerio": "^3.5"
+    }
+}
