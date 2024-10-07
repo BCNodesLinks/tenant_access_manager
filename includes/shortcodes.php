@@ -13,7 +13,7 @@
  * Email Entry Form Shortcode
  *
  * This shortcode displays an email entry form and handles form submissions.
- * Upon successful submission, it triggers a 'portal_email_submitted' event in Customer.io.
+ * Upon successful submission, it triggers a 'portal_email_submitted' event in Customer.io as an anonymous event.
  *
  * Usage: [tam_email_form]
  *
@@ -44,11 +44,12 @@ function tam_email_entry_form() {
             // Generate the confirmation link
             $confirm_link = add_query_arg( array( 'tam_confirm_email' => $token ), site_url( '/login/' ) );
 
-            // Track the 'email_submitted' event with Customer.io
-            tam_track_customerio_event( $email, 'email_submitted', array(
-                'confirmation_url' => esc_url( $confirm_link ),
-                'timestamp'        => time(),
-            ) );
+            // Track the 'email_submitted' event with Customer.io as an anonymous event
+            tam_track_customerio_event( '', 'email_submitted', array(
+                'email'             => $email,
+                'confirmation_url'  => esc_url( $confirm_link ),
+                'timestamp'         => time(),
+            ), true );
 
             // Inform the user that a confirmation link has been sent
             $output .= '<p>If your email is registered, you will receive a confirmation link shortly.</p>';
@@ -68,7 +69,6 @@ function tam_email_entry_form() {
     return $output;
 }
 add_shortcode( 'tam_email_form', 'tam_email_entry_form' );
-
 
 /**
  * Logout Button Shortcode
