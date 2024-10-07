@@ -33,7 +33,7 @@ function tam_get_customerio_client() {
                 }
 
                 // Optionally, set the region if you're targeting the EU
-                if ( defined( 'CUSTOMERIO_REGION' ) && CUSTOMERIO_REGION === 'eu' ) {
+                if ( defined( 'CUSTOMERIO_REGION' ) && strtolower( CUSTOMERIO_REGION ) === 'eu' ) {
                     $client->setRegion( 'eu' );
                 }
 

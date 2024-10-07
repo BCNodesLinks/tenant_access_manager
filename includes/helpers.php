@@ -122,3 +122,27 @@ function tam_display_tenant_logo( $size = 'full', $class = 'tam-tenant-logo' ) {
         echo ''; // Or you can provide a default logo here
     }
 }
+
+/**
+ * Retrieve Tenant Name Based on Tenant ID
+ *
+ * This function retrieves the Tenant Name from the 'tenant' custom post type based on the Tenant ID.
+ *
+ * @param int $tenant_id Tenant ID.
+ * @return string Tenant Name.
+ */
+function tam_get_tenant_name( $tenant_id ) {
+    // Ensure Tenant ID is an integer
+    $tenant_id = intval( $tenant_id );
+
+    // Retrieve the tenant post
+    $tenant_post = get_post( $tenant_id );
+
+    // Check if the post exists and is of type 'tenant'
+    if ( $tenant_post && $tenant_post->post_type === 'tenant' ) {
+        return get_the_title( $tenant_post );
+    }
+
+    // Return 'Unknown Tenant' if not found
+    return 'Unknown Tenant';
+}
