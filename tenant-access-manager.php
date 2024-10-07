@@ -20,6 +20,8 @@ if ( ! defined( 'TAM_EVENT_PREFIX' ) ) {
     define( 'TAM_EVENT_PREFIX', 'portal_' );
 }
 
+define( 'TAM_CUSTOMERIO_TRANSACTIONAL_TEMPLATE_ID', '3' ); // Replace with your actual template ID
+
 // Include the Composer autoloader
 if ( file_exists( TAM_PLUGIN_DIR . 'vendor/autoload.php' ) ) {
     require_once TAM_PLUGIN_DIR . 'vendor/autoload.php';
