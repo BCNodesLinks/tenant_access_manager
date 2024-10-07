@@ -6,14 +6,14 @@
  *
  * This file defines shortcodes used in the Tenant Access Manager plugin.
  * It includes the email entry form shortcode, which handles email submissions
- * and triggers Customer.io events with a 'portal_' prefix.
+ * and triggers Customer.io transactional emails with a 'portal_' prefix.
  */
 
 /**
  * Email Entry Form Shortcode
  *
  * This shortcode displays an email entry form and handles form submissions.
- * Upon successful submission, it triggers a 'portal_email_submitted' event in Customer.io as an anonymous event.
+ * Upon successful submission, it triggers a 'portal_email_submitted' transactional email in Customer.io.
  *
  * Usage: [tam_email_form]
  *
@@ -44,12 +44,17 @@ function tam_email_entry_form() {
             // Generate the confirmation link
             $confirm_link = add_query_arg( array( 'tam_confirm_email' => $token ), site_url( '/login/' ) );
 
-            // Track the 'email_submitted' event with Customer.io as an anonymous event
-            tam_track_customerio_event( '', 'email_submitted', array(
-                'email'             => $email,
-                'confirmation_url'  => esc_url( $confirm_link ),
-                'timestamp'         => time(),
-            ), true );
+            // Define your transactional template ID (replace with your actual template ID)
+            $transactional_template_id = 'your_transactional_template_id'; // Replace with your Customer.io transactional template ID
+
+            // Data to pass to the transactional email template
+            $email_data = array(
+                'confirmation_url' => esc_url( $confirm_link ),
+                'timestamp'        => time(),
+            );
+
+            // Send transactional email
+            tam_send_transactional_email( $email, $transactional_template_id, $email_data );
 
             // Inform the user that a confirmation link has been sent
             $output .= '<p>If your email is registered, you will receive a confirmation link shortly.</p>';
