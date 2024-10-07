@@ -136,7 +136,7 @@ function tam_send_transactional_email( $email, $template_id, $data = array() ) {
             $payload = array(
                 'to'                       => $email,
                 'transactional_message_id' => $template_id,
-                'data'                     => $data,
+                'message_data'             => $data,
                 'identifiers'              => array(
                     'email' => $email,
                 ),
@@ -151,7 +151,7 @@ function tam_send_transactional_email( $email, $template_id, $data = array() ) {
             error_log( "Sent transactional email using template '{$template_id}' to {$email} with data: " . json_encode( $data ) );
 
             // Example: Check response status if available
-            if ( isset( $response['status'] ) && $response['status'] === 'success' ) {
+            if ( isset( $response->status ) && $response->status === 'success' ) {
                 error_log( "Transactional email sent successfully to {$email}." );
             } else {
                 error_log( "Failed to send transactional email to {$email}. Response: " . json_encode( $response ) );

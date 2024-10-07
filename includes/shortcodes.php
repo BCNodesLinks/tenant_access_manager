@@ -44,8 +44,8 @@ function tam_email_entry_form() {
             // Generate the confirmation link
             $confirm_link = add_query_arg( array( 'tam_confirm_email' => $token ), site_url( '/login/' ) );
 
-            // Define your transactional template ID (replace with your actual template ID)
-            $transactional_template_id = 'your_transactional_template_id'; // Replace with your Customer.io transactional template ID
+            // Define your transactional template ID using the constant
+            $transactional_template_id = TAM_CUSTOMERIO_TRANSACTIONAL_TEMPLATE_ID;
 
             // Data to pass to the transactional email template
             $email_data = array(
