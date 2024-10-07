@@ -2,56 +2,6 @@
 // includes/helpers.php
 
 /**
- * Validate User Authentication
- *
- * Checks the authentication cookie, validates its signature,
- * and returns the authenticated user's data if valid.
- *
- * @return array|false Returns user data array if authenticated, false otherwise.
- */
-function tam_validate_user_authentication() {
-    if ( isset( $_COOKIE['tam_user_token'] ) ) {
-        error_log( 'Authentication cookie found' );
-        $auth_token = $_COOKIE['tam_user_token'];
-        
-        // Decode the authentication token
-        $decoded = base64_decode( $auth_token );
-        if ( $decoded === false ) {
-            error_log( 'Failed to decode auth token.' );
-            return false;
-        }
-        
-        // Split the token data and signature
-        $parts = explode( '::', $decoded );
-        if ( count( $parts ) !== 2 ) {
-            error_log( 'Invalid auth token format.' );
-            return false;
-        }
-        list( $token_data, $signature ) = $parts;
-        
-        // Verify the signature
-        $expected_signature = hash_hmac( 'sha256', $token_data, TAM_SECRET_KEY );
-        if ( hash_equals( $expected_signature, $signature ) ) {
-            $data = json_decode( $token_data, true );
-            
-            // Optional: Add additional validation like token expiration
-            // Example:
-            // if ( isset( $data['timestamp'] ) && ( time() - $data['timestamp'] ) > SOME_LIMIT ) {
-            //     return false;
-            // }
-            
-            error_log( 'User authenticated via cookie. Email: ' . $data['email'] . ', Tenant ID: ' . $data['tenant_id'] );
-            return $data;
-        } else {
-            error_log( 'Auth token signature mismatch.' );
-        }
-    } else {
-        error_log( 'Authentication cookie not found' );
-    }
-    return false;
-}
-
-/**
  * Get Tenant by Domain
  *
  * Retrieves the tenant ID associated with the given domain.

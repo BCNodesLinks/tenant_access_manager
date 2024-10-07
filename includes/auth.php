@@ -57,10 +57,10 @@ function tam_handle_email_confirmation() {
 
                 // Generate a secure authentication token with user and tenant information
                 $token_data = json_encode( array(
-                    'email'       => $email,
-                    'tenant_id'   => $tenant_id,
-                    'tenant_name' => $tenant_name,
-                    'timestamp'   => time(),
+                    'email'        => $email,
+                    'tenant_id'    => $tenant_id,
+                    'tenant_name'  => $tenant_name,
+                    'timestamp'    => time(),
                 ) );
                 $signature = hash_hmac( 'sha256', $token_data, TAM_SECRET_KEY );
                 $auth_token = base64_encode( $token_data . '::' . $signature );
@@ -86,9 +86,9 @@ function tam_handle_email_confirmation() {
                  * This associates the event with the user's email address in Customer.io.
                  */
                 tam_track_customerio_event( $email, 'email_confirmed', array(
-                    'tenant_id'   => $tenant_id,
-                    'tenant_name' => $tenant_name,
-                    'timestamp'   => time(),
+                    'tenant_id'    => $tenant_id,
+                    'tenant_name'  => $tenant_name,
+                    'timestamp'    => time(),
                 ) );
 
                 // Redirect the authenticated user to the portal page
@@ -136,9 +136,9 @@ function tam_handle_logout() {
              */
             if ( isset( $email ) && isset( $tenant_id ) && isset( $tenant_name ) ) {
                 tam_track_customerio_event( $email, 'user_logged_out', array(
-                    'tenant_id'   => $tenant_id,
-                    'tenant_name' => $tenant_name,
-                    'timestamp'   => time(),
+                    'tenant_id'    => $tenant_id,
+                    'tenant_name'  => $tenant_name,
+                    'timestamp'    => time(),
                 ) );
             }
 
@@ -188,4 +188,38 @@ function tam_update_customerio_profile( $email, $tenant_id, $tenant_name ) {
     } else {
         error_log( 'Customer.io client not available. Cannot update profile.' );
     }
+}
+
+
+/**
+ * Validate User Authentication
+ *
+ * This function validates the user's authentication token and retrieves user data.
+ *
+ * @return array|false Returns user data array if valid, false otherwise.
+ */
+function tam_validate_user_authentication() {
+    if ( isset( $_COOKIE['tam_user_token'] ) ) {
+        $auth_token = $_COOKIE['tam_user_token'];
+        $decoded    = base64_decode( $auth_token );
+
+        if ( $decoded ) {
+            // Ensure the token contains both data and signature
+            if ( strpos( $decoded, '::' ) !== false ) {
+                list( $token_data, $signature ) = explode( '::', $decoded );
+
+                // Verify the signature
+                $expected_signature = hash_hmac( 'sha256', $token_data, TAM_SECRET_KEY );
+                if ( hash_equals( $expected_signature, $signature ) ) {
+                    $data = json_decode( $token_data, true );
+
+                    if ( is_array( $data ) && isset( $data['email'], $data['tenant_id'], $data['tenant_name'] ) ) {
+                        return $data;
+                    }
+                }
+            }
+        }
+    }
+
+    return false;
 }
