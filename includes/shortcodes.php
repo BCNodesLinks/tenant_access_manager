@@ -119,3 +119,58 @@ function tam_tenant_logo_shortcode( $atts ) {
     }
 }
 add_shortcode( 'tam_tenant_logo', 'tam_tenant_logo_shortcode' );
+
+/**
+ * Tenant Name Shortcode
+ *
+ * This shortcode displays the name of the tenant associated with the currently authenticated user.
+ *
+ * Usage: [tam_tenant_name]
+ *
+ * Attributes:
+ * - class (optional): CSS class for styling the tenant name element.
+ *
+ * @param array $atts Shortcode attributes.
+ * @return string HTML content displaying the tenant name.
+ */
+function tam_tenant_name_shortcode( $atts ) {
+    // Define default attributes and merge with user-defined attributes
+    $atts = shortcode_atts( array(
+        'class' => 'tam-tenant-name', // Default CSS class
+    ), $atts, 'tam_tenant_name' );
+
+    // Log that the shortcode has been triggered
+    error_log( 'tam_tenant_name_shortcode triggered.' );
+
+    // Retrieve authentication data
+    $auth_data = tam_validate_user_authentication();
+
+    if ( $auth_data ) {
+        error_log( 'Authentication successful.' );
+
+        // Extract and sanitize tenant ID
+        $tenant_id = intval( $auth_data['tenant_id'] );
+        error_log( 'Authenticated Tenant ID: ' . $tenant_id );
+
+        // Retrieve tenant post
+        $tenant_post = get_post( $tenant_id );
+
+        if ( $tenant_post && 'tenant' === $tenant_post->post_type ) { // Assuming 'tenant' is the post type
+            // Get the tenant name (post title)
+            $tenant_name = get_the_title( $tenant_id );
+            error_log( 'Retrieved Tenant Name: ' . $tenant_name );
+
+            // Prepare the HTML output with the tenant name
+            $html = '<span class="' . esc_attr( $atts['class'] ) . '">' . esc_html( $tenant_name ) . '</span>';
+
+            return $html;
+        } else {
+            error_log( 'Tenant post not found or incorrect post type for Tenant ID: ' . $tenant_id );
+            return ''; // Optionally, you can return a default message or placeholder
+        }
+    } else {
+        error_log( 'Authentication failed. User not authenticated or no tenant assigned.' );
+        return ''; // Optionally, you can return a default message or placeholder
+    }
+}
+add_shortcode( 'tam_tenant_name', 'tam_tenant_name_shortcode' );
