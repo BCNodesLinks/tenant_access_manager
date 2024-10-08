@@ -437,3 +437,98 @@ add_action( 'template_redirect', 'tam_allow_login_page', 100 );
  *
  * Add any other access control related functions here.
  */
+
+/**
+ * Customize Elementor Query to Filter Blog Posts by Tenant
+ *
+ * Filters Elementor queries for Blog Posts to show only those associated with the authenticated tenant.
+ *
+ * @param WP_Query $query The Elementor query instance.
+ */
+function tam_filter_elementor_blog_posts_by_query_id( $query ) {
+
+    // Initial log to confirm the function is triggered
+    error_log( 'tam_filter_elementor_blog_posts_by_query_id triggered.' );
+
+    static $is_running = false;
+
+    if ( $is_running ) {
+        error_log( 'Prevented recursion in tam_filter_elementor_blog_posts_by_query_id' );
+        return;
+    }
+
+    $is_running = true;
+
+    // Log all query_vars for detailed insight
+    error_log( 'Query Vars: ' . print_r( $query->query_vars, true ) );
+
+    // Ensure we're modifying the 'post' post type query
+    if ( isset( $query->query_vars['post_type'] ) ) {
+        error_log( 'Post Type is set: ' . print_r( $query->query_vars['post_type'], true ) );
+    } else {
+        error_log( 'Post Type is NOT set.' );
+    }
+
+    if ( isset( $query->query_vars['post_type'] ) && ( 'post' === $query->query_vars['post_type'] || ( is_array( $query->query_vars['post_type'] ) && in_array( 'post', $query->query_vars['post_type'] ) ) ) ) {
+        error_log( 'Post Type matches "post". Proceeding with tenant filtering.' );
+
+        $auth_data = tam_validate_user_authentication();
+        error_log( 'Authentication function called.' );
+
+        if ( $auth_data ) {
+            error_log( 'Authentication successful.' );
+            $tenant_id = intval( $auth_data['tenant_id'] );
+            error_log( 'Authenticated Tenant ID: ' . $tenant_id );
+
+            // Define meta query with three conditions
+            $meta_query = array(
+                'relation' => 'OR',
+                // Condition 1: allowed_tenants contains the current tenant ID
+                array(
+                    'key'     => 'allowed_tenants',
+                    'value'   => '"' . $tenant_id . '"', // Serialized array requires quotes
+                    'compare' => 'LIKE',
+                ),
+                // Condition 2: allowed_tenants is an empty string (globally visible)
+                array(
+                    'key'     => 'allowed_tenants',
+                    'value'   => '',
+                    'compare' => '=',
+                ),
+                // Condition 3: allowed_tenants does not exist (additional safety)
+                array(
+                    'key'     => 'allowed_tenants',
+                    'compare' => 'NOT EXISTS',
+                ),
+            );
+
+            // Log the constructed meta_query
+            error_log( 'Constructed Meta Query: ' . print_r( $meta_query, true ) );
+
+            // Merge with existing meta queries if any
+            if ( isset( $query->query_vars['meta_query'] ) && is_array( $query->query_vars['meta_query'] ) ) {
+                error_log( 'Existing Meta Query: ' . print_r( $query->query_vars['meta_query'], true ) );
+                $meta_query = array_merge( $query->query_vars['meta_query'], $meta_query );
+                error_log( 'Merged Meta Query: ' . print_r( $meta_query, true ) );
+            }
+
+            // Set the new meta_query
+            $query->set( 'meta_query', $meta_query );
+            error_log( 'Meta Query has been set.' );
+
+            // Optional: Log the final WP_Query arguments
+            error_log( 'Final WP_Query Args: ' . print_r( $query->query_vars, true ) );
+
+        } else {
+            error_log( 'Authentication failed. User not authenticated.' );
+            // If not authenticated, hide all posts
+            $query->set( 'post__in', array( 0 ) );
+            error_log( 'Set post__in to array(0) to hide all posts.' );
+        }
+    } else {
+        error_log( 'Post Type does not match "post". Skipping tenant filtering.' );
+    }
+
+    $is_running = false;
+}
+add_action( 'elementor/query/tenant_blog_posts', 'tam_filter_elementor_blog_posts_by_query_id', 10, 1 );
