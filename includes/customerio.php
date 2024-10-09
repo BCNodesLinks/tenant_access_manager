@@ -1,159 +1,197 @@
 <?php
-// includes/customerio.php
+/**
+ * Customer.io Integration for Tenant Access Manager (TAM) Plugin
+ *
+ * Handles initialization and interactions with the Customer.io API.
+ *
+ * @package TenantAccessManager
+ */
 
-use Customerio\Client;
+if ( ! defined( 'ABSPATH' ) ) {
+    exit; // Exit if accessed directly.
+}
 
 /**
- * Get the Customer.io Client
+ * Conditional Logging Function
  *
- * Initializes and returns the Customer.io client using defined credentials.
+ * Logs messages only if TAM_DEBUG is enabled.
  *
- * @return Client|false Returns the Customer.io client instance or false on failure.
+ * @param string $message The message to log.
+ */
+function tam_log( $message ) {
+    if ( defined( 'TAM_DEBUG' ) && TAM_DEBUG ) {
+        error_log( '[TAM_DEBUG] ' . $message );
+    }
+}
+
+/**
+ * Initialize Customer.io Client
+ *
+ * Retrieves API credentials from constants and initializes the Customer.io client.
+ *
+ * @return \Customerio\Client|null The initialized Customer.io client or null on failure.
  */
 function tam_get_customerio_client() {
-    static $client = null;
+    // Retrieve constants from wp-config.php
+    $site_id    = defined( 'CUSTOMERIO_SITE_ID' ) ? CUSTOMERIO_SITE_ID : '';
+    $api_key    = defined( 'CUSTOMERIO_API_KEY' ) ? CUSTOMERIO_API_KEY : '';
+    $app_key    = defined( 'CUSTOMERIO_APP_KEY' ) ? CUSTOMERIO_APP_KEY : '';
+    $region     = defined( 'CUSTOMERIO_REGION' ) ? CUSTOMERIO_REGION : 'eu';
 
-    if ( is_null( $client ) ) {
-        // Ensure that the Customer.io API credentials are defined
-        if ( defined( 'CUSTOMERIO_API_KEY' ) && defined( 'CUSTOMERIO_SITE_ID' ) ) {
-            try {
-                // Initialize the Customer.io client
-                $client = new Client( CUSTOMERIO_SITE_ID, CUSTOMERIO_API_KEY );
-
-                // If you have an App API Key, set it here
-                if ( defined( 'CUSTOMERIO_APP_KEY' ) && ! empty( CUSTOMERIO_APP_KEY ) ) {
-                    $client->setAppAPIKey( CUSTOMERIO_APP_KEY );
-                }
-
-                // Optionally, set the region if you're targeting the EU
-                if ( defined( 'CUSTOMERIO_REGION' ) && strtolower( CUSTOMERIO_REGION ) === 'eu' ) {
-                    $client->setRegion( 'eu' );
-                }
-
-            } catch ( Exception $e ) {
-                error_log( 'Customer.io Initialization Error: ' . $e->getMessage() );
-                return false;
-            }
-        } else {
-            error_log( 'Customer.io credentials are not fully defined.' );
-            return false;
-        }
+    // Validate required credentials
+    if ( empty( $site_id ) || empty( $api_key ) ) {
+        tam_log( 'Customer.io Initialization Error: CUSTOMERIO_SITE_ID and CUSTOMERIO_API_KEY must be defined.' );
+        return null;
     }
 
-    return $client;
+    try {
+        // Initialize the Customer.io client with Site API Key and Site ID
+        $client = new \Customerio\Client( $api_key, $site_id, [ 'region' => $region ] );
+
+        // Set App API Key for transactional emails if defined
+        if ( ! empty( $app_key ) ) {
+            $client->setAppAPIKey( $app_key );
+        }
+
+        tam_log( 'Customer.io client initialized successfully.' );
+        return $client;
+    } catch ( Exception $e ) {
+        tam_log( 'Customer.io Initialization Exception: ' . $e->getMessage() );
+        return null;
+    }
+}
+
+/**
+ * Update Customer.io Profile
+ *
+ * Updates the customer profile with tenant information.
+ *
+ * @param string $email       The customer's email address.
+ * @param int    $tenant_id   The tenant's ID.
+ * @param string $tenant_name The tenant's name.
+ */
+function tam_update_customerio_profile( $email, $tenant_id, $tenant_name ) {
+    $client = tam_get_customerio_client();
+    if ( ! $client ) {
+        tam_log( 'Customer.io client not available. Cannot update profile.' );
+        return;
+    }
+
+    try {
+        // Update the customer profile with 'id', Tenant ID, and Tenant Name
+        $response = $client->customers->add( array(
+            'id'          => $email, // Using email as the unique identifier
+            'email'       => $email,
+            'tenant_id'   => $tenant_id,
+            'tenant_name' => $tenant_name,
+            'updated_at'  => time(),
+        ) );
+
+        tam_log( "Updated Customer.io profile for {$email} with Tenant ID: {$tenant_id} and Tenant Name: {$tenant_name}. Response: " . print_r( $response, true ) );
+    } catch ( Exception $e ) {
+        tam_log( 'Customer.io Profile Update Error: ' . $e->getMessage() );
+    }
 }
 
 /**
  * Track Customer.io Event
  *
- * This function tracks an event for a customer in Customer.io with a 'portal_' prefix.
- * It supports both identified and anonymous events.
+ * Tracks an event for a customer, identified by email or anonymous ID.
  *
- * @param string      $email         Customer's email address. Required for identified events.
- * @param string      $event_name    Name of the event to track.
- * @param array       $data          Additional data to include with the event.
- * @param bool        $anonymous     Whether the event is anonymous. If true, event is sent without associating with a user.
- * @param string|null $anonymous_id  Unique identifier for anonymous events. Required if $anonymous is true.
- * @return void
+ * @param string      $email         The customer's email address.
+ * @param string      $event_name    The name of the event.
+ * @param array       $data          Additional data for the event.
+ * @param bool        $anonymous     Whether the event is anonymous.
+ * @param string|null $anonymous_id  The anonymous ID if the event is anonymous.
  */
 function tam_track_customerio_event( $email, $event_name, $data = array(), $anonymous = false, $anonymous_id = null ) {
     $client = tam_get_customerio_client();
-    if ( $client ) {
-        try {
-            // Prepend 'portal_' to the event name
-            $prefixed_event_name = 'portal_' . $event_name;
+    if ( ! $client ) {
+        tam_log( 'Customer.io client not available. Cannot track event.' );
+        return;
+    }
 
-            if ( ! $anonymous ) {
-                if ( ! is_email( $email ) ) {
-                    error_log( 'Customer.io Tracking Error: Invalid email provided for identified event.' );
-                    return;
-                }
+    try {
+        // Prepend 'portal_' to the event name
+        $prefixed_event_name = 'portal_' . $event_name;
 
-                // Track identified event using the customer's email
-                $client->customers->event( array(
-                    'id'    => $email, // Using email as identifier
-                    'name'  => $prefixed_event_name,
-                    'data'  => $data,
-                ) );
-
-                error_log( "Tracked identified event '{$prefixed_event_name}' for {$email} with data: " . json_encode( $data ) );
-            } else {
-                if ( empty( $anonymous_id ) ) {
-                    error_log( 'Customer.io Tracking Error: anonymous_id is required for anonymous events.' );
-                    return;
-                }
-
-                // Track anonymous event with a unique anonymous_id
-                $client->events->anonymous( array(
-                    'name'         => $prefixed_event_name,
-                    'data'         => $data,
-                    'anonymous_id' => $anonymous_id,
-                ) );
-
-                error_log( "Tracked anonymous event '{$prefixed_event_name}' with anonymous_id '{$anonymous_id}' and data: " . json_encode( $data ) );
+        if ( ! $anonymous ) {
+            if ( ! is_email( $email ) ) {
+                tam_log( 'Customer.io Tracking Error: Invalid email provided for identified event.' );
+                return;
             }
-        } catch ( Exception $e ) {
-            error_log( 'Customer.io Tracking Error: ' . $e->getMessage() );
+
+            // Track identified event using the customer's email
+            $response = $client->customers->event( array(
+                'id'   => $email, // Using email as identifier
+                'name' => $prefixed_event_name,
+                'data' => $data,
+            ) );
+
+            tam_log( "Tracked identified event '{$prefixed_event_name}' for {$email} with data: " . json_encode( $data ) . ". Response: " . print_r( $response, true ) );
+        } else {
+            if ( empty( $anonymous_id ) ) {
+                tam_log( 'Customer.io Tracking Error: anonymous_id is required for anonymous events.' );
+                return;
+            }
+
+            // Track anonymous event with a unique anonymous_id
+            $response = $client->events->anonymous( array(
+                'name'         => $prefixed_event_name,
+                'data'         => $data,
+                'anonymous_id' => $anonymous_id,
+            ) );
+
+            tam_log( "Tracked anonymous event '{$prefixed_event_name}' with anonymous_id '{$anonymous_id}' and data: " . json_encode( $data ) . ". Response: " . print_r( $response, true ) );
         }
-    } else {
-        error_log( 'Customer.io client not available. Cannot track event.' );
+    } catch ( Exception $e ) {
+        tam_log( 'Customer.io Tracking Error: ' . $e->getMessage() );
     }
 }
 
 /**
  * Send Transactional Email via Customer.io
  *
- * This function sends a transactional email using a specified transactional template.
+ * Sends a transactional email using a specified template.
  *
- * @param string $email          Recipient's email address.
- * @param string $template_id    The identifier for the transactional email template in Customer.io.
- * @param array  $data           Data to populate the transactional email template.
- * @return void
+ * @param string $email       The recipient's email address.
+ * @param string $template_id The ID of the transactional email template.
+ * @param array  $data        Additional data to populate the email template.
  */
 function tam_send_transactional_email( $email, $template_id, $data = array() ) {
     $client = tam_get_customerio_client();
-    if ( $client ) {
-        try {
-            // Check if 'send' endpoint is initialized
-            if ( ! isset( $client->send ) ) {
-                error_log( 'Customer.io Send endpoint is not initialized.' );
-                return;
-            }
+    if ( ! $client ) {
+        tam_log( 'Customer.io client not available. Cannot send transactional email.' );
+        return;
+    }
 
-            if ( ! is_email( $email ) ) {
-                error_log( 'Customer.io Transactional Email Error: Invalid email address.' );
-                return;
-            }
-
-            // Prepare the payload for transactional email
-            $payload = array(
-                'to'                       => $email,
-                'transactional_message_id' => $template_id,
-                'message_data'             => $data,
-                'identifiers'              => array(
-                    'email' => $email,
-                ),
-            );
-
-            // Send transactional email
-            $response = $client->send()->email( $payload );
-
-            // Optionally, handle the response as needed
-            // For example, log success or check response status
-
-            error_log( "Sent transactional email using template '{$template_id}' to {$email} with data: " . json_encode( $data ) );
-
-            // Example: Check response status if available
-            if ( isset( $response->status ) && $response->status === 'success' ) {
-                error_log( "Transactional email sent successfully to {$email}." );
-            } else {
-                error_log( "Failed to send transactional email to {$email}. Response: " . json_encode( $response ) );
-            }
-        } catch ( Exception $e ) {
-            error_log( 'Customer.io Transactional Email Error: ' . $e->getMessage() );
+    try {
+        // Check if 'send' endpoint is initialized
+        if ( ! method_exists( $client, 'send' ) ) {
+            tam_log( 'Customer.io Send endpoint is not initialized.' );
+            return;
         }
-    } else {
-        error_log( 'Customer.io client not available. Cannot send transactional email.' );
+
+        if ( ! is_email( $email ) ) {
+            tam_log( 'Customer.io Transactional Email Error: Invalid email address.' );
+            return;
+        }
+
+        // Prepare the payload for transactional email
+        $payload = array(
+            'to'                       => $email,
+            'transactional_message_id' => $template_id,
+            'message_data'             => $data,
+            // 'identifiers' is typically not required for transactional emails
+        );
+
+        // Send transactional email
+        $response = $client->send()->email( $payload );
+
+        // Log the response for debugging
+        tam_log( "Sent transactional email using template '{$template_id}' to {$email} with data: " . json_encode( $data ) );
+        tam_log( "Transactional Email Response: " . print_r( $response, true ) );
+    } catch ( Exception $e ) {
+        tam_log( 'Customer.io Transactional Email Error: ' . $e->getMessage() );
     }
 }
-?>
