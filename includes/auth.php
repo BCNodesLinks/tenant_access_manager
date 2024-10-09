@@ -8,6 +8,17 @@
  * including setting authentication cookies and tracking events with Customer.io.
  */
 
+if ( ! defined( 'ABSPATH' ) ) {
+    exit; // Exit if accessed directly.
+}
+
+/**
+ * Include Customer.io Integration
+ *
+ * Ensures that all Customer.io related functions are available.
+ */
+require_once plugin_dir_path( __FILE__ ) . 'customerio.php';
+
 /**
  * Handle Email Confirmation
  *
@@ -22,12 +33,12 @@ function tam_handle_email_confirmation() {
         $token = sanitize_text_field( $_GET['tam_confirm_email'] );
 
         // Log the token handling for debugging purposes
-        error_log( 'Handling email confirmation for token: ' . $token );
+        tam_log( 'Handling email confirmation for token: ' . $token );
 
         // Retrieve token data from transient storage
         $data = get_transient( 'tam_email_token_' . $token );
         if ( $data ) {
-            error_log( 'Token valid. Email: ' . $data['email'] );
+            tam_log( 'Token valid. Email: ' . $data['email'] );
 
             // Delete the transient as it's no longer needed to prevent reuse
             delete_transient( 'tam_email_token_' . $token );
@@ -43,7 +54,7 @@ function tam_handle_email_confirmation() {
             if ( strpos( $email, '@' ) !== false ) {
                 list( $user, $domain ) = explode( '@', $email );
             } else {
-                error_log( 'Invalid email format in token data: ' . $email );
+                tam_log( 'Invalid email format in token data: ' . $email );
                 echo '<p>' . __( 'Invalid email format.', 'tenant-access-manager' ) . '</p>';
                 return;
             }
@@ -74,7 +85,7 @@ function tam_handle_email_confirmation() {
                     'samesite' => 'Lax',
                 ) );
 
-                error_log( 'User authenticated. Email: ' . $email . ', Tenant ID: ' . $tenant_id . ', Tenant Name: ' . $tenant_name );
+                tam_log( 'User authenticated. Email: ' . $email . ', Tenant ID: ' . $tenant_id . ', Tenant Name: ' . $tenant_name );
 
                 /**
                  * Update the customer's profile with Tenant ID and Tenant Name in Customer.io.
@@ -96,12 +107,12 @@ function tam_handle_email_confirmation() {
                 exit;
             } else {
                 // Log and display an error if no tenant is found for the email domain
-                error_log( 'No tenant found for domain: ' . $domain );
+                tam_log( 'No tenant found for domain: ' . $domain );
                 echo '<p>' . __( 'No tenant found for your email domain.', 'tenant-access-manager' ) . '</p>';
             }
         } else {
             // Log and display an error if the token is invalid or expired
-            error_log( 'Invalid or expired token: ' . $token );
+            tam_log( 'Invalid or expired token: ' . $token );
             echo '<p>' . __( 'Invalid or expired token.', 'tenant-access-manager' ) . '</p>';
         }
     }
@@ -158,38 +169,6 @@ function tam_handle_logout() {
     }
 }
 add_action( 'init', 'tam_handle_logout' );
-
-/**
- * Update Customer.io Customer Profile with Tenant Information
- *
- * This function updates the customer's profile in Customer.io with Tenant ID and Tenant Name.
- *
- * @param string $email        Customer's email address.
- * @param int    $tenant_id    Tenant ID associated with the customer.
- * @param string $tenant_name  Tenant Name associated with the customer.
- * @return void
- */
-function tam_update_customerio_profile( $email, $tenant_id, $tenant_name ) {
-    $client = tam_get_customerio_client();
-    if ( $client ) {
-        try {
-            // Update the customer profile with Tenant ID and Tenant Name
-            $client->customers->add( array(
-                'email'        => $email,
-                'tenant_id'    => $tenant_id,
-                'tenant_name'  => $tenant_name,
-                'updated_at'   => time(),
-            ) );
-
-            error_log( "Updated Customer.io profile for {$email} with Tenant ID: {$tenant_id} and Tenant Name: {$tenant_name}" );
-        } catch ( Exception $e ) {
-            error_log( 'Customer.io Profile Update Error: ' . $e->getMessage() );
-        }
-    } else {
-        error_log( 'Customer.io client not available. Cannot update profile.' );
-    }
-}
-
 
 /**
  * Validate User Authentication
