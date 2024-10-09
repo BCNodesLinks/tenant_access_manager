@@ -177,19 +177,79 @@ function tam_send_transactional_email( $email, $template_id, $data = array() ) {
             return;
         }
 
-        // Prepare the payload for transactional email
+        tam_log("attempttosend");
+
+        // Prepare the payload for transactional email with 'identifiers'
         $payload = array(
             'to'                       => $email,
             'transactional_message_id' => $template_id,
             'message_data'             => $data,
-            // 'identifiers' is typically not required for transactional emails
+            'identifiers'              => array(
+                'email' => $email, // Associate the email with the customer
+            ),
         );
+
+        // Log the payload being sent
+        tam_log( 'Transactional Email Payload: ' . json_encode( $payload ) );
 
         // Send transactional email
         $response = $client->send()->email( $payload );
 
         // Log the response for debugging
         tam_log( "Sent transactional email using template '{$template_id}' to {$email} with data: " . json_encode( $data ) );
+        tam_log( "Transactional Email Response: " . print_r( $response, true ) );
+    } catch ( Exception $e ) {
+        tam_log( 'Customer.io Transactional Email Error: ' . $e->getMessage() );
+    }
+}
+
+/**
+ * Send Transactional Email via Customer.io (Alternative Method)
+ *
+ * This function is an alternative method in case you need to specify an anonymous ID.
+ *
+ * @param string      $email         The recipient's email address.
+ * @param string      $template_id    The ID of the transactional email template.
+ * @param array       $data          Additional data to populate the email template.
+ * @param string      $anonymous_id   The anonymous ID for the event.
+ */
+function tam_send_transactional_email_anonymous( $email, $template_id, $data = array(), $anonymous_id ) {
+    $client = tam_get_customerio_client();
+    if ( ! $client ) {
+        tam_log( 'Customer.io client not available. Cannot send transactional email.' );
+        return;
+    }
+
+    try {
+        // Check if 'send' endpoint is initialized
+        if ( ! method_exists( $client, 'send' ) ) {
+            tam_log( 'Customer.io Send endpoint is not initialized.' );
+            return;
+        }
+
+        if ( ! is_email( $email ) ) {
+            tam_log( 'Customer.io Transactional Email Error: Invalid email address.' );
+            return;
+        }
+
+        // Prepare the payload for transactional email with 'identifiers'
+        $payload = array(
+            'to'                       => $email,
+            'transactional_message_id' => $template_id,
+            'message_data'             => $data,
+            'identifiers'              => array(
+                'email' => $email, // Associate the email with the customer
+            ),
+        );
+
+        // Log the payload being sent
+        tam_log( 'Transactional Email Payload (Anonymous): ' . json_encode( $payload ) );
+
+        // Send transactional email
+        $response = $client->send()->email( $payload );
+
+        // Log the response for debugging
+        tam_log( "Sent transactional email (Anonymous) using template '{$template_id}' to {$email} with data: " . json_encode( $data ) );
         tam_log( "Transactional Email Response: " . print_r( $response, true ) );
     } catch ( Exception $e ) {
         tam_log( 'Customer.io Transactional Email Error: ' . $e->getMessage() );
