@@ -4,13 +4,6 @@
 use Customerio\Client;
 
 /**
- * Tenant Access Manager - Customer.io Integration
- *
- * This file handles the integration with Customer.io, including tracking both
- * identified and anonymous events, as well as sending transactional emails.
- */
-
-/**
  * Get the Customer.io Client
  *
  * Initializes and returns the Customer.io client using defined credentials.
@@ -163,3 +156,4 @@ function tam_send_transactional_email( $email, $template_id, $data = array() ) {
         error_log( 'Customer.io client not available. Cannot send transactional email.' );
     }
 }
+?>
