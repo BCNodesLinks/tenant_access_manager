@@ -59,27 +59,32 @@ function tam_consolidated_access_control() {
                 $item_ids   = is_array( $items ) ? array_map( 'intval', $items ) : array( intval( $items ) );
 
                 if ( ! in_array( $current_id, $item_ids, true ) ) {
+                    error_log( "Access Denied: Tenant ID {$tenant_id} does not have access to Post ID {$current_id}." );
                     wp_redirect( home_url( '/no-access/' ) );
                     exit;
                 } else {
                     // For 'flow' posts, track flow view event
                     if ( 'flow' === $post_type ) {
+                        error_log( "Access Granted: Tenant ID {$tenant_id} viewing Flow Post ID {$current_id}." );
                         tam_track_flow_view_event( $auth_data['email'], $current_id, get_the_title( $current_id ) );
                     }
                 }
             } else {
+                error_log( "Access Denied: No items found for Tenant ID {$tenant_id} and Meta Key '{$meta_key}'." );
                 wp_redirect( home_url( '/no-access/' ) );
                 exit;
             }
         }
     } else {
+        error_log( "Unauthenticated Access Attempt: Redirecting to login page." );
         // Redirect unauthenticated users to the login page
         $login_page = get_page_by_path( 'login' );
         if ( $login_page ) {
             wp_redirect( get_permalink( $login_page->ID ) );
             exit;
         } else {
-            wp_die( __( 'Login page not found.', 'tenant-access-manager' ) );
+            error_log( "Login page not found. Displaying error." );
+            echo '<p>' . __( 'Login page not found.', 'tenant-access-manager' ) . '</p>';
         }
     }
 }
@@ -216,7 +221,7 @@ add_action( 'pre_get_posts', 'tam_unified_pre_get_posts_filter' );
  */
 function tam_filter_elementor_blog_posts_by_query_id( $query ) {
     // Initial log to confirm the function is triggered
-    // (Removed logging for performance)
+    error_log( "[TAM_DEBUG] Elementor query filter triggered." );
 
     static $is_running = false;
 
@@ -229,10 +234,12 @@ function tam_filter_elementor_blog_posts_by_query_id( $query ) {
 
     // Ensure we're modifying the 'post' post type query
     if ( isset( $query->query_vars['post_type'] ) && ( 'post' === $query->query_vars['post_type'] || ( is_array( $query->query_vars['post_type'] ) && in_array( 'post', $query->query_vars['post_type'] ) ) ) ) {
+        error_log( "[TAM_DEBUG] Modifying Elementor query for post type 'post'." );
         $auth_data = tam_validate_user_authentication();
 
         if ( $auth_data ) {
             $tenant_id = intval( $auth_data['tenant_id'] );
+            error_log( "[TAM_DEBUG] Authenticated Tenant ID: {$tenant_id}" );
 
             // Define meta query with three conditions
             $meta_query = array(
@@ -258,13 +265,16 @@ function tam_filter_elementor_blog_posts_by_query_id( $query ) {
 
             // Merge with existing meta queries if any
             if ( isset( $query->query_vars['meta_query'] ) && is_array( $query->query_vars['meta_query'] ) ) {
+                error_log( "[TAM_DEBUG] Merging existing meta queries with new conditions." );
                 $meta_query = array_merge( $query->query_vars['meta_query'], $meta_query );
             }
 
             // Set the new meta_query
             $query->set( 'meta_query', $meta_query );
+            error_log( "[TAM_DEBUG] Meta query set for Elementor posts." );
         } else {
             // If not authenticated, hide all posts
+            error_log( "[TAM_DEBUG] User not authenticated. Restricting access to all posts." );
             $query->set( 'post__in', array( 0 ) );
         }
     }
@@ -284,10 +294,12 @@ add_action( 'elementor/query/tenant_blog_posts', 'tam_filter_elementor_blog_post
  * @return void
  */
 function tam_track_flow_view_event( $email, $flow_id, $flow_name ) {
+    error_log( "[TAM_DEBUG] Initiating tracking for 'portal_flow_viewed' event. Email: {$email}, Flow ID: {$flow_id}, Flow Name: {$flow_name}" );
     tam_track_customerio_event( $email, 'flow_viewed', array(
         'flow_id'   => $flow_id,
         'flow_name' => $flow_name,
     ) );
+    error_log( "[TAM_DEBUG] 'portal_flow_viewed' event tracking initiated." );
 }
 
 /**
