@@ -25,10 +25,16 @@ function tam_consolidated_access_control() {
     // Log the current URL being accessed
     error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] Current URL: " . esc_url( home_url( add_query_arg( null, null ) ) ) );
 
+    // Check if the current user is an administrator
+    if ( current_user_can( 'administrator' ) ) {
+        error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] Current user is an administrator. Granting unrestricted access." );
+        return; // Allow admins unrestricted access
+    }
+
     // Allow access if user is logged in
     if ( is_user_logged_in() ) {
         error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] User is logged in." );
-        // Do NOT return here; allow further processing for event tracking
+        // Do NOT return here; allow further processing for tenant-specific access control and event tracking
     } else {
         // Allow access to admin, AJAX, and email confirmation URLs
         if ( is_admin() ) {
@@ -81,7 +87,7 @@ function tam_consolidated_access_control() {
         }
     }
 
-    // At this point, user is logged in; proceed with access control and event tracking
+    // At this point, user is logged in and not an admin; proceed with tenant-specific access control and event tracking
     $auth_data = tam_validate_user_authentication();
     if ( $auth_data ) {
         error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] User authenticated successfully. Email: {$auth_data['email']}, Tenant ID: {$auth_data['tenant_id']}, Tenant Name: {$auth_data['tenant_name']}" );
