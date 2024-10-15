@@ -50,18 +50,23 @@ function tam_handle_email_confirmation() {
                 return;
             }
 
-            // Extract email and domain from the token data
+            // Extract email from the token data
             $email = $data['email'];
-            if ( strpos( $email, '@' ) !== false ) {
-                list( $user, $domain ) = explode( '@', $email );
-            } else {
-                error_log( "[TAM_DEBUG] Invalid email format in token data: {$email}" );
-                echo '<p>' . __( 'Invalid email format.', 'tenant-access-manager' ) . '</p>';
-                return;
-            }
 
-            // Retrieve tenant ID based on the email domain
-            $tenant_id = tam_get_tenant_by_domain( $domain );
+            // Try to retrieve tenant ID based on email address
+            $tenant_id = tam_get_tenant_by_email( $email );
+
+            if ( ! $tenant_id ) {
+                // If no tenant found via email, try to retrieve tenant ID based on email domain
+                if ( strpos( $email, '@' ) !== false ) {
+                    list( $user, $domain ) = explode( '@', $email );
+                    $tenant_id = tam_get_tenant_by_domain( $domain );
+                } else {
+                    error_log( "[TAM_DEBUG] Invalid email format: {$email}" );
+                    echo '<p>' . __( 'Invalid email format.', 'tenant-access-manager' ) . '</p>';
+                    return;
+                }
+            }
 
             if ( $tenant_id ) {
                 // Retrieve Tenant Name based on Tenant ID
@@ -107,9 +112,9 @@ function tam_handle_email_confirmation() {
                 wp_redirect( site_url( '/portal/' ) );
                 exit;
             } else {
-                // Log and display an error if no tenant is found for the email domain
-                error_log( "[TAM_DEBUG] No tenant found for domain: {$domain}" );
-                echo '<p>' . __( 'No tenant found for your email domain.', 'tenant-access-manager' ) . '</p>';
+                // Log and display an error if no tenant is found for the email or domain
+                error_log( "[TAM_DEBUG] No tenant found for email: {$email}" );
+                echo '<p>' . __( 'No tenant found for your email.', 'tenant-access-manager' ) . '</p>';
             }
         } else {
             // Log and display an error if the token is invalid or expired
@@ -200,8 +205,34 @@ function tam_validate_user_authentication() {
                     $data = json_decode( $token_data, true );
 
                     if ( is_array( $data ) && isset( $data['email'], $data['tenant_id'], $data['tenant_name'] ) ) {
-                        error_log( "[TAM_DEBUG] User authenticated. Email: {$data['email']}, Tenant ID: {$data['tenant_id']}, Tenant Name: {$data['tenant_name']}" );
-                        return $data;
+                        $email     = $data['email'];
+                        $tenant_id = intval( $data['tenant_id'] );
+
+                        // Re-validate the user's email against the tenant's allowed emails or domains
+                        $access_type = get_post_meta( $tenant_id, '_tam_tenant_access_type', true );
+                        if ( 'email' === $access_type ) {
+                            $allowed_emails = get_post_meta( $tenant_id, '_tam_tenant_emails', false );
+                            if ( in_array( strtolower( $email ), array_map( 'strtolower', $allowed_emails ), true ) ) {
+                                return $data;
+                            } else {
+                                error_log( "[TAM_DEBUG] Email {$email} not allowed for Tenant ID {$tenant_id}." );
+                                return false;
+                            }
+                        } else {
+                            if ( strpos( $email, '@' ) !== false ) {
+                                list( $user, $domain ) = explode( '@', $email );
+                                $allowed_domains = get_post_meta( $tenant_id, '_tam_tenant_domains', false );
+                                if ( in_array( strtolower( $domain ), array_map( 'strtolower', $allowed_domains ), true ) ) {
+                                    return $data;
+                                } else {
+                                    error_log( "[TAM_DEBUG] Domain {$domain} not allowed for Tenant ID {$tenant_id}." );
+                                    return false;
+                                }
+                            } else {
+                                error_log( "[TAM_DEBUG] Invalid email format: {$email}" );
+                                return false;
+                            }
+                        }
                     } else {
                         error_log( "[TAM_DEBUG] Authentication data missing required fields." );
                     }
