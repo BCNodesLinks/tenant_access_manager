@@ -26,38 +26,63 @@ function tam_email_entry_form() {
     if ( isset( $_POST['tam_email_entry_form_nonce'] ) && wp_verify_nonce( $_POST['tam_email_entry_form_nonce'], 'tam_email_entry_form_action' ) ) {
         if ( isset( $_POST['tam_user_email'] ) && is_email( $_POST['tam_user_email'] ) ) {
             $email = sanitize_email( $_POST['tam_user_email'] );
-            $token = bin2hex( random_bytes( 32 ) );
-            $expiration = time() + 24 * HOUR_IN_SECONDS;
-            $data = array(
-                'email'      => $email,
-                'expiration' => $expiration,
-            );
 
-            // Log token generation and transient setting for debugging
-            error_log( 'Generated token: ' . $token . ' for email: ' . $email );
-            if ( set_transient( 'tam_email_token_' . $token, $data, 24 * HOUR_IN_SECONDS ) ) {
-                error_log( 'Transient set for token: ' . $token );
-            } else {
-                error_log( 'Failed to set transient for token: ' . $token );
+            // Attempt to find tenant by email
+            $tenant_id = tam_get_tenant_by_email( $email );
+
+            if ( ! $tenant_id ) {
+                // If no tenant found via email, try to retrieve tenant ID based on email domain
+                if ( strpos( $email, '@' ) !== false ) {
+                    list( $user, $domain ) = explode( '@', $email );
+                    $tenant_id = tam_get_tenant_by_domain( $domain );
+                }
             }
 
-            // Generate the confirmation link
-            $confirm_link = add_query_arg( array( 'tam_confirm_email' => $token ), site_url( '/login/' ) );
+            if ( $tenant_id ) {
+                // Proceed with generating token and sending email
+                $token = bin2hex( random_bytes( 32 ) );
+                $expiration = time() + 24 * HOUR_IN_SECONDS;
+                $data = array(
+                    'email'      => $email,
+                    'expiration' => $expiration,
+                );
 
-            // Define your transactional template ID using the constant
-            $transactional_template_id = TAM_CUSTOMERIO_TRANSACTIONAL_TEMPLATE_ID;
+                // Log token generation and transient setting for debugging
+                error_log( 'Generated token: ' . $token . ' for email: ' . $email );
+                if ( set_transient( 'tam_email_token_' . $token, $data, 24 * HOUR_IN_SECONDS ) ) {
+                    error_log( 'Transient set for token: ' . $token );
+                } else {
+                    error_log( 'Failed to set transient for token: ' . $token );
+                }
 
-            // Data to pass to the transactional email template
-            $email_data = array(
-                'confirmation_url' => esc_url( $confirm_link ),
-                'timestamp'        => time(),
-            );
+                // Generate the confirmation link
+                $confirm_link = add_query_arg( array( 'tam_confirm_email' => $token ), site_url( '/login/' ) );
 
-            // Send transactional email
-            tam_send_transactional_email( $email, $transactional_template_id, $email_data );
+                // Define your transactional template ID using the constant
+                $transactional_template_id = TAM_CUSTOMERIO_TRANSACTIONAL_TEMPLATE_ID;
 
-            // Inform the user that a confirmation link has been sent
-            $output .= '<p>If your email is registered, you will receive a confirmation link shortly.</p>';
+                // Data to pass to the transactional email template
+                $email_data = array(
+                    'confirmation_url' => esc_url( $confirm_link ),
+                    'timestamp'        => time(),
+                );
+
+                // Send transactional email
+                tam_send_transactional_email( $email, $transactional_template_id, $email_data );
+
+                // Inform the user that a confirmation link has been sent
+                $output .= '<p>If your email is registered, you will receive a confirmation link shortly.</p>';
+            } else {
+                // No tenant found for the email or domain
+                // Optionally, you can display a generic message to avoid revealing whether the email is registered
+                $output .= '<p>If your email is registered, you will receive a confirmation link shortly.</p>';
+
+                // Alternatively, display a specific message
+                // $output .= '<p>No tenant found for your email. Please contact support.</p>';
+
+                // Log for debugging purposes
+                error_log( 'No tenant found for email: ' . $email . '. Magic link not sent.' );
+            }
         } else {
             $output .= '<p>Please enter a valid email address.</p>';
         }
@@ -119,6 +144,26 @@ function tam_tenant_logo_shortcode( $atts ) {
     }
 }
 add_shortcode( 'tam_tenant_logo', 'tam_tenant_logo_shortcode' );
+
+/**
+ * Tenant Logo Shortcode
+ */
+function tam_tenant_background_shortcode( $atts ) {
+    $atts = shortcode_atts( array(
+        'size'  => 'full',
+        'class' => 'tam-tenant-background',
+    ), $atts, 'tam_tenant_background' );
+
+    $logo_url = tam_get_authenticated_tenant_background_url( $atts['size'] );
+    if ( $logo_url ) {
+        $html = '<img src="' . esc_url( $logo_url ) . '" class="' . esc_attr( $atts['class'] ) . '" alt="Tenant Background" />';
+        return $html;
+    } else {
+        // Return an empty string or a placeholder
+        return '';
+    }
+}
+add_shortcode( 'tam_tenant_background', 'tam_tenant_background_shortcode' );
 
 /**
  * Tenant Name Shortcode
