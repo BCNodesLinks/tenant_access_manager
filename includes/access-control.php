@@ -31,11 +31,75 @@ function tam_consolidated_access_control() {
         return; // Allow admins unrestricted access
     }
 
-    // Allow access if user is logged in
+    // Initialize authentication flag
+    $is_authenticated = false;
+    $auth_data = false;
+
+    // Check if user is logged in via WordPress
     if ( is_user_logged_in() ) {
-        error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] User is logged in." );
-        // Do NOT return here; allow further processing for tenant-specific access control and event tracking
+        error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] User is logged in via WordPress." );
+        $is_authenticated = true;
+        // Optionally, you can retrieve user data here if needed
     } else {
+        // Check if user is authenticated via 'tam_user_token' cookie
+        $auth_data = tam_validate_user_authentication();
+        if ( $auth_data ) {
+            error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] User is authenticated via 'tam_user_token' cookie." );
+            $is_authenticated = true;
+        }
+    }
+
+    if ( $is_authenticated ) {
+        // User is authenticated either via WordPress or via 'tam_user_token'
+        // Proceed with tenant-specific access control and event tracking
+
+        if ( $auth_data ) {
+            // User authenticated via 'tam_user_token' (custom authentication)
+            error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] User authenticated via 'tam_user_token': Email: {$auth_data['email']}, Tenant ID: {$auth_data['tenant_id']}, Tenant Name: {$auth_data['tenant_name']}" );
+        }
+
+        // Tenant-specific access control for single posts
+        if ( is_singular( array( 'flow', 'resource', 'rep' ) ) ) {
+            $post_type = get_post_type();
+            $meta_key  = $post_type . 's'; // e.g., 'flows', 'resources', 'reps'
+            $tenant_id = $auth_data ? intval( $auth_data['tenant_id'] ) : 0;
+            $current_id = get_the_ID();
+            $flow_name = get_the_title( $current_id );
+
+            error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] Current Post Type: {$post_type}, Meta Key: {$meta_key}, Current Post ID: {$current_id}, Flow Name: {$flow_name}" );
+
+            $items = get_post_meta( $tenant_id, $meta_key, true );
+            error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] Retrieved Post Meta for Tenant ID {$tenant_id} and Meta Key '{$meta_key}': " . print_r( $items, true ) );
+
+            if ( $items ) {
+                $item_ids = is_array( $items ) ? array_map( 'intval', $items ) : array( intval( $items ) );
+
+                error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] Allowed Post IDs for Tenant ID {$tenant_id} and Meta Key '{$meta_key}': " . implode( ', ', $item_ids ) );
+
+                if ( ! in_array( $current_id, $item_ids, true ) ) {
+                    error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] Access Denied: Tenant ID {$tenant_id} does not have access to Post ID {$current_id}." );
+                    wp_redirect( home_url( '/no-access/' ) );
+                    exit;
+                } else {
+                    error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] Access Granted: Tenant ID {$tenant_id} has access to Post ID {$current_id}." );
+                    // For 'flow' posts, track flow view event
+                    if ( 'flow' === $post_type ) {
+                        error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] Post Type is 'flow'. Preparing to track 'portal_flow_viewed' event." );
+                        tam_track_flow_view_event( $auth_data['email'], $current_id, $flow_name );
+                        error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] 'portal_flow_viewed' event tracking function called." );
+                    }
+                }
+            } else {
+                error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] Access Denied: No items found for Tenant ID {$tenant_id} and Meta Key '{$meta_key}'." );
+                wp_redirect( home_url( '/no-access/' ) );
+                exit;
+            }
+        } else {
+            error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] Current query is not for a singular 'flow', 'resource', or 'rep' post type." );
+        }
+    } else {
+        // User is not authenticated via WordPress or 'tam_user_token'
+
         // Allow access to admin, AJAX, and email confirmation URLs
         if ( is_admin() ) {
             error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] Access allowed: is_admin() is true." );
@@ -75,64 +139,6 @@ function tam_consolidated_access_control() {
 
         // If not logged in and none of the above conditions are met, redirect to login
         error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] User not authenticated. Redirecting to login page." );
-        $login_page = get_page_by_path( 'login' );
-        if ( $login_page ) {
-            error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] Redirecting to login page: " . get_permalink( $login_page->ID ) );
-            wp_redirect( get_permalink( $login_page->ID ) );
-            exit;
-        } else {
-            error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] Login page not found. Displaying error message." );
-            echo '<p>' . __( 'Login page not found.', 'tenant-access-manager' ) . '</p>';
-            exit;
-        }
-    }
-
-    // At this point, user is logged in and not an admin; proceed with tenant-specific access control and event tracking
-    $auth_data = tam_validate_user_authentication();
-    if ( $auth_data ) {
-        error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] User authenticated successfully. Email: {$auth_data['email']}, Tenant ID: {$auth_data['tenant_id']}, Tenant Name: {$auth_data['tenant_name']}" );
-
-        // Tenant-specific access control for single posts
-        if ( is_singular( array( 'flow', 'resource', 'rep' ) ) ) {
-            $post_type = get_post_type();
-            $meta_key  = $post_type . 's'; // e.g., 'flows', 'resources', 'reps'
-            $tenant_id = intval( $auth_data['tenant_id'] );
-            $current_id = get_the_ID();
-            $flow_name = get_the_title( $current_id );
-
-            error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] Current Post Type: {$post_type}, Meta Key: {$meta_key}, Current Post ID: {$current_id}, Flow Name: {$flow_name}" );
-
-            $items = get_post_meta( $tenant_id, $meta_key, true );
-            error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] Retrieved Post Meta for Tenant ID {$tenant_id} and Meta Key '{$meta_key}': " . print_r( $items, true ) );
-
-            if ( $items ) {
-                $item_ids = is_array( $items ) ? array_map( 'intval', $items ) : array( intval( $items ) );
-
-                error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] Allowed Post IDs for Tenant ID {$tenant_id} and Meta Key '{$meta_key}': " . implode( ', ', $item_ids ) );
-
-                if ( ! in_array( $current_id, $item_ids, true ) ) {
-                    error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] Access Denied: Tenant ID {$tenant_id} does not have access to Post ID {$current_id}." );
-                    wp_redirect( home_url( '/no-access/' ) );
-                    exit;
-                } else {
-                    error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] Access Granted: Tenant ID {$tenant_id} has access to Post ID {$current_id}." );
-                    // For 'flow' posts, track flow view event
-                    if ( 'flow' === $post_type ) {
-                        error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] Post Type is 'flow'. Preparing to track 'portal_flow_viewed' event." );
-                        tam_track_flow_view_event( $auth_data['email'], $current_id, $flow_name );
-                        error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] 'portal_flow_viewed' event tracking function called." );
-                    }
-                }
-            } else {
-                error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] Access Denied: No items found for Tenant ID {$tenant_id} and Meta Key '{$meta_key}'." );
-                wp_redirect( home_url( '/no-access/' ) );
-                exit;
-            }
-        } else {
-            error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] Current query is not for a singular 'flow', 'resource', or 'rep' post type." );
-        }
-    } else {
-        error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] User authentication failed. Redirecting to login page." );
         $login_page = get_page_by_path( 'login' );
         if ( $login_page ) {
             error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] Redirecting to login page: " . get_permalink( $login_page->ID ) );
@@ -271,7 +277,7 @@ function tam_unified_pre_get_posts_filter( $query ) {
             }
         }
     } else {
-        // Not authenticated; restrict access
+        // Not authenticated via 'tam_user_token'; restrict access
         $query->set( 'post__in', array( 0 ) );
         error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] tam_unified_pre_get_posts_filter: User not authenticated. Restricting access to all posts by setting 'post__in' to [0]." );
     }
@@ -340,7 +346,7 @@ function tam_filter_elementor_blog_posts_by_query_id( $query ) {
             $query->set( 'meta_query', $meta_query );
             error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] tam_filter_elementor_blog_posts_by_query_id: Meta query set for Elementor posts." );
         } else {
-            // If not authenticated, hide all posts
+            // If not authenticated via 'tam_user_token', hide all posts
             $query->set( 'post__in', array( 0 ) );
             error_log( "[TAM_DEBUG " . current_time( 'mysql' ) . "] tam_filter_elementor_blog_posts_by_query_id: User not authenticated. Restricting access to all posts." );
         }
