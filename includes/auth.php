@@ -33,18 +33,19 @@ function tam_handle_email_confirmation() {
         $token = sanitize_text_field( $_GET['tam_confirm_email'] );
 
         // Log the token handling for debugging purposes
-        tam_log( 'Handling email confirmation for token: ' . $token );
+        error_log( "[TAM_DEBUG] Handling email confirmation for token: {$token}" );
 
         // Retrieve token data from transient storage
         $data = get_transient( 'tam_email_token_' . $token );
         if ( $data ) {
-            tam_log( 'Token valid. Email: ' . $data['email'] );
+            error_log( "[TAM_DEBUG] Token valid. Email: {$data['email']}" );
 
             // Delete the transient as it's no longer needed to prevent reuse
             delete_transient( 'tam_email_token_' . $token );
 
             // Check if the token has expired
             if ( time() > $data['expiration'] ) {
+                error_log( "[TAM_DEBUG] Token has expired: {$token}" );
                 echo '<p>' . __( 'Token has expired. Please request a new confirmation email.', 'tenant-access-manager' ) . '</p>';
                 return;
             }
@@ -54,7 +55,7 @@ function tam_handle_email_confirmation() {
             if ( strpos( $email, '@' ) !== false ) {
                 list( $user, $domain ) = explode( '@', $email );
             } else {
-                tam_log( 'Invalid email format in token data: ' . $email );
+                error_log( "[TAM_DEBUG] Invalid email format in token data: {$email}" );
                 echo '<p>' . __( 'Invalid email format.', 'tenant-access-manager' ) . '</p>';
                 return;
             }
@@ -85,7 +86,7 @@ function tam_handle_email_confirmation() {
                     'samesite' => 'Lax',
                 ) );
 
-                tam_log( 'User authenticated. Email: ' . $email . ', Tenant ID: ' . $tenant_id . ', Tenant Name: ' . $tenant_name );
+                error_log( "[TAM_DEBUG] User authenticated. Email: {$email}, Tenant ID: {$tenant_id}, Tenant Name: {$tenant_name}" );
 
                 /**
                  * Update the customer's profile with Tenant ID and Tenant Name in Customer.io.
@@ -107,12 +108,12 @@ function tam_handle_email_confirmation() {
                 exit;
             } else {
                 // Log and display an error if no tenant is found for the email domain
-                tam_log( 'No tenant found for domain: ' . $domain );
+                error_log( "[TAM_DEBUG] No tenant found for domain: {$domain}" );
                 echo '<p>' . __( 'No tenant found for your email domain.', 'tenant-access-manager' ) . '</p>';
             }
         } else {
             // Log and display an error if the token is invalid or expired
-            tam_log( 'Invalid or expired token: ' . $token );
+            error_log( "[TAM_DEBUG] Invalid or expired token: {$token}" );
             echo '<p>' . __( 'Invalid or expired token.', 'tenant-access-manager' ) . '</p>';
         }
     }
@@ -160,10 +161,12 @@ function tam_handle_logout() {
                 exit;
             } else {
                 // Display an error if the login page is not found
+                error_log( "[TAM_DEBUG] Login page not found during logout." );
                 wp_die( __( 'Login page not found.', 'tenant-access-manager' ) );
             }
         } else {
             // Display an error if the logout request is invalid
+            error_log( "[TAM_DEBUG] Invalid logout request detected." );
             wp_die( __( 'Invalid logout request.', 'tenant-access-manager' ) );
         }
     }
@@ -183,6 +186,8 @@ function tam_validate_user_authentication() {
         $decoded    = base64_decode( $auth_token );
 
         if ( $decoded ) {
+            error_log( "[TAM_DEBUG] Decoded authentication token successfully." );
+
             // Ensure the token contains both data and signature
             if ( strpos( $decoded, '::' ) !== false ) {
                 list( $token_data, $signature ) = explode( '::', $decoded );
@@ -190,14 +195,27 @@ function tam_validate_user_authentication() {
                 // Verify the signature
                 $expected_signature = hash_hmac( 'sha256', $token_data, TAM_SECRET_KEY );
                 if ( hash_equals( $expected_signature, $signature ) ) {
+                    error_log( "[TAM_DEBUG] Authentication token signature verified." );
+
                     $data = json_decode( $token_data, true );
 
                     if ( is_array( $data ) && isset( $data['email'], $data['tenant_id'], $data['tenant_name'] ) ) {
+                        error_log( "[TAM_DEBUG] User authenticated. Email: {$data['email']}, Tenant ID: {$data['tenant_id']}, Tenant Name: {$data['tenant_name']}" );
                         return $data;
+                    } else {
+                        error_log( "[TAM_DEBUG] Authentication data missing required fields." );
                     }
+                } else {
+                    error_log( "[TAM_DEBUG] Authentication token signature mismatch." );
                 }
+            } else {
+                error_log( "[TAM_DEBUG] Authentication token format invalid. Missing '::' separator." );
             }
+        } else {
+            error_log( "[TAM_DEBUG] Failed to decode authentication token." );
         }
+    } else {
+        error_log( "[TAM_DEBUG] Authentication cookie 'tam_user_token' not found." );
     }
 
     return false;
