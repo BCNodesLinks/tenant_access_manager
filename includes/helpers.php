@@ -125,6 +125,37 @@ function tam_get_authenticated_tenant_logo_url( $size = 'full' ) {
 }
 
 /**
+ * Get Authenticated Tenant Logo URL
+ *
+ * Retrieves the logo URL for the authenticated tenant.
+ *
+ * @param string $size Image size (default 'full').
+ * @return string URL of the tenant logo or default logo.
+ */
+function tam_get_authenticated_tenant_background_url( $size = 'full' ) {
+    // Start QM Timer for Tenant Logo Retrieval
+    do_action( 'qm/start', 'Tenant Background Retrieval' );
+
+    $auth_data = tam_validate_user_authentication();
+    if ( $auth_data ) {
+        $tenant_id = intval( $auth_data['tenant_id'] );
+        // Get logo ID from post meta
+        $logo_id = get_post_meta( $tenant_id, 'tenant_background', true );
+        if ( $logo_id ) {
+            $logo_url = wp_get_attachment_image_url( $logo_id, $size );
+            // Stop QM Timer
+            do_action( 'qm/stop', 'Tenant Background Retrieval' );
+            return $logo_url;
+        }
+    }
+    // Return default logo URL if tenant logo not set or user not authenticated
+    $default_background_url = TAM_PLUGIN_URL . 'assets/images/default-background.png'; // Adjust the path as needed
+    // Stop QM Timer
+    do_action( 'qm/stop', 'Tenant Background Retrieval' );
+    return $default_background_url;
+}
+
+/**
  * Display Tenant Logo in Templates
  *
  * Echoes the tenant logo image HTML.

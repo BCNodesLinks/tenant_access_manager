@@ -146,6 +146,26 @@ function tam_tenant_logo_shortcode( $atts ) {
 add_shortcode( 'tam_tenant_logo', 'tam_tenant_logo_shortcode' );
 
 /**
+ * Tenant Logo Shortcode
+ */
+function tam_tenant_background_shortcode( $atts ) {
+    $atts = shortcode_atts( array(
+        'size'  => 'full',
+        'class' => 'tam-tenant-background',
+    ), $atts, 'tam_tenant_background' );
+
+    $logo_url = tam_get_authenticated_tenant_background_url( $atts['size'] );
+    if ( $logo_url ) {
+        $html = '<img src="' . esc_url( $logo_url ) . '" class="' . esc_attr( $atts['class'] ) . '" alt="Tenant Background" />';
+        return $html;
+    } else {
+        // Return an empty string or a placeholder
+        return '';
+    }
+}
+add_shortcode( 'tam_tenant_background', 'tam_tenant_background_shortcode' );
+
+/**
  * Tenant Name Shortcode
  *
  * This shortcode displays the name of the tenant associated with the currently authenticated user.
