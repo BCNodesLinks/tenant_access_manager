@@ -22,7 +22,6 @@ if ( ! defined( 'TAM_EVENT_PREFIX' ) ) {
 define( 'TAM_CUSTOMERIO_TRANSACTIONAL_TEMPLATE_ID', '3' ); // Replace with your actual template ID
 
 /*
-
 define( 'TAM_SECRET_KEY', getenv( 'TAM_SECRET_KEY' ) );
 define( 'CUSTOMERIO_API_KEY', getenv( 'CUSTOMERIO_API_KEY' ) );
 define( 'CUSTOMERIO_SITE_ID', getenv( 'CUSTOMERIO_SITE_ID' ) );
@@ -30,7 +29,6 @@ define( 'CUSTOMERIO_APP_KEY', getenv( 'CUSTOMERIO_APP_KEY' ) ); // If applicable
 define( 'CUSTOMERIO_REGION', getenv( 'CUSTOMERIO_REGION' ) ); // or set a default
 
 The above are all set in wp-config */
-
 
 // Include the Composer autoloader
 if ( file_exists( TAM_PLUGIN_DIR . 'vendor/autoload.php' ) ) {
@@ -80,6 +78,19 @@ function tam_initialize_plugin() {
 }
 add_action( 'plugins_loaded', 'tam_initialize_plugin' );
 
+// Enqueue Auto-Logout Script
+function tam_enqueue_scripts() {
+    wp_enqueue_script( 'tam-auto-logout', TAM_PLUGIN_URL . 'assets/js/auto-logout.js', array( 'jquery' ), '1.0', true );
+
+    // Pass the inactivity time (in milliseconds) and logout nonce to the script
+    wp_localize_script( 'tam-auto-logout', 'tamSettings', array(
+        'inactivityTime' => 15 * 60 * 1000, // 15 minutes in milliseconds
+        'logoutNonce'    => wp_create_nonce( 'tam_logout_action' ),
+    ) );
+}
+add_action( 'wp_enqueue_scripts', 'tam_enqueue_scripts' );
+
+// Log Customer.io Client Initialization
 add_action( 'init', function() {
     $client = tam_get_customerio_client();
     if ( $client ) {
@@ -88,4 +99,5 @@ add_action( 'init', function() {
         error_log( 'Customer.io client failed to initialize.' );
     }
 } );
+
 ?>
