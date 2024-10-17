@@ -21,7 +21,7 @@ function tam_register_custom_post_types() {
     $args_tenant = array(
         'label'              => __( 'Tenant', 'tenant-access-manager' ),
         'labels'             => $labels_tenant,
-        'supports'           => array( 'title' ),
+        'supports'           => array( 'title', 'excerpt' ), // Added 'excerpt' here
         'public'             => false,
         'show_ui'            => true,
         'menu_icon'          => 'dashicons-groups',
@@ -46,7 +46,7 @@ function tam_register_custom_post_types() {
     $args_flow = array(
         'label'              => __( 'Flow', 'tenant-access-manager' ),
         'labels'             => $labels_flow,
-        'supports'           => array( 'title', 'editor', 'thumbnail' ),
+        'supports'           => array( 'title', 'editor', 'thumbnail', 'excerpt' ), // Added 'excerpt' here
         'public'             => true,
         'show_ui'            => true,
         'menu_icon'          => 'dashicons-admin-page',
@@ -73,7 +73,7 @@ function tam_register_custom_post_types() {
     $args_resource = array(
         'label'              => __( 'Resource', 'tenant-access-manager' ),
         'labels'             => $labels_resource,
-        'supports'           => array( 'title', 'editor', 'thumbnail' ),
+        'supports'           => array( 'title', 'editor', 'thumbnail', 'excerpt' ), // Added 'excerpt' here
         'public'             => true,
         'show_ui'            => true,
         'menu_icon'          => 'dashicons-admin-page',
@@ -100,7 +100,7 @@ function tam_register_custom_post_types() {
     $args_rep = array(
         'label'              => __( 'Rep', 'tenant-access-manager' ),
         'labels'             => $labels_rep,
-        'supports'           => array( 'title', 'editor', 'thumbnail' ),
+        'supports'           => array( 'title', 'editor', 'thumbnail', 'excerpt' ), // Added 'excerpt' here
         'public'             => true,
         'show_ui'            => true,
         'menu_icon'          => 'dashicons-admin-users',
