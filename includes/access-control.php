@@ -382,4 +382,136 @@ function tam_track_flow_view_event( $email, $flow_id, $flow_name ) {
  *
  * Add any other access control related functions here.
  */
+
+ /**
+ * Customize Elementor Query to Filter Flows by Tenant
+ *
+ * Filters Elementor queries for Flows to show only those associated with the authenticated tenant.
+ *
+ * @param WP_Query $query The Elementor query instance.
+ */
+function tam_filter_elementor_flows_by_query_id( $query ) {
+    static $is_running = false;
+
+    if ( $is_running ) {
+        error_log( 'Prevented recursion in tam_filter_elementor_flows_by_query_id' );
+        return;
+    }
+
+    $is_running = true;
+
+    // Ensure we're modifying the 'flow' post type query
+    if ( isset( $query->query_vars['post_type'] ) ) {
+        $post_type = $query->query_vars['post_type'];
+
+        if ( ( is_array( $post_type ) && in_array( 'flow', $post_type ) ) || $post_type === 'flow' ) {
+            $auth_data = tam_validate_user_authentication();
+            if ( $auth_data ) {
+                $tenant_id = intval( $auth_data['tenant_id'] );
+                $flows = get_post_meta( $tenant_id, 'flows', true );
+
+                if ( $flows ) {
+                    $flow_ids = is_array( $flows ) ? array_map( 'intval', $flows ) : array( intval( $flows ) );
+                    $query->set( 'post__in', $flow_ids );
+                    $query->set( 'orderby', 'post__in' ); // Preserve order
+                } else {
+                    $query->set( 'post__in', array( 0 ) ); // No flows
+                }
+            } else {
+                $query->set( 'post__in', array( 0 ) ); // Not authenticated
+            }
+        }
+    }
+
+    $is_running = false;
+}
+add_action( 'elementor/query/tenant_flows', 'tam_filter_elementor_flows_by_query_id' );
+
+/**
+ * Customize Elementor Query to Filter Resources by Tenant
+ *
+ * Filters Elementor queries for Resources to show only those associated with the authenticated tenant.
+ *
+ * @param WP_Query $query The Elementor query instance.
+ */
+function tam_filter_elementor_resources_by_query_id( $query ) {
+    static $is_running = false;
+
+    if ( $is_running ) {
+        error_log( 'Prevented recursion in tam_filter_elementor_resources_by_query_id' );
+        return;
+    }
+
+    $is_running = true;
+
+    // Ensure we're modifying the 'resource' post type query
+    if ( isset( $query->query_vars['post_type'] ) ) {
+        $post_type = $query->query_vars['post_type'];
+
+        if ( ( is_array( $post_type ) && in_array( 'resource', $post_type ) ) || $post_type === 'resource' ) {
+            $auth_data = tam_validate_user_authentication();
+            if ( $auth_data ) {
+                $tenant_id = intval( $auth_data['tenant_id'] );
+                $resources = get_post_meta( $tenant_id, 'resources', true );
+
+                if ( $resources ) {
+                    $resource_ids = is_array( $resources ) ? array_map( 'intval', $resources ) : array( intval( $resources ) );
+                    $query->set( 'post__in', $resource_ids );
+                    $query->set( 'orderby', 'post__in' ); // Preserve order
+                } else {
+                    $query->set( 'post__in', array( 0 ) ); // No resources
+                }
+            } else {
+                $query->set( 'post__in', array( 0 ) ); // Not authenticated
+            }
+        }
+    }
+
+    $is_running = false;
+}
+add_action( 'elementor/query/tenant_resources', 'tam_filter_elementor_resources_by_query_id' );
+
+/**
+ * Customize Elementor Query to Filter Reps by Tenant
+ *
+ * Filters Elementor queries for Reps to show only those associated with the authenticated tenant.
+ *
+ * @param WP_Query $query The Elementor query instance.
+ */
+function tam_filter_elementor_reps_by_query_id( $query ) {
+    static $is_running = false;
+
+    if ( $is_running ) {
+        error_log( 'Prevented recursion in tam_filter_elementor_reps_by_query_id' );
+        return;
+    }
+
+    $is_running = true;
+
+    // Ensure we're modifying the 'rep' post type query
+    if ( isset( $query->query_vars['post_type'] ) ) {
+        $post_type = $query->query_vars['post_type'];
+
+        if ( ( is_array( $post_type ) && in_array( 'rep', $post_type ) ) || $post_type === 'rep' ) {
+            $auth_data = tam_validate_user_authentication();
+            if ( $auth_data ) {
+                $tenant_id = intval( $auth_data['tenant_id'] );
+                $reps = get_post_meta( $tenant_id, 'reps', true );
+
+                if ( $reps ) {
+                    $rep_ids = is_array( $reps ) ? array_map( 'intval', $reps ) : array( intval( $reps ) );
+                    $query->set( 'post__in', $rep_ids );
+                    $query->set( 'orderby', 'post__in' ); // Preserve order
+                } else {
+                    $query->set( 'post__in', array( 0 ) ); // No reps
+                }
+            } else {
+                $query->set( 'post__in', array( 0 ) ); // Not authenticated
+            }
+        }
+    }
+
+    $is_running = false;
+}
+add_action( 'elementor/query/tenant_reps', 'tam_filter_elementor_reps_by_query_id' );
 ?>
