@@ -74,10 +74,11 @@ function tam_handle_email_confirmation() {
 
                 // Generate a secure authentication token with user and tenant information
                 $token_data = json_encode( array(
-                    'email'        => $email,
-                    'tenant_id'    => $tenant_id,
-                    'tenant_name'  => $tenant_name,
-                    'timestamp'    => time(),
+                    'email'         => $email,
+                    'tenant_id'     => $tenant_id,
+                    'tenant_name'   => $tenant_name,
+                    'timestamp'     => time(),
+                    'last_activity' => time(), // Initialize last_activity
                 ) );
                 $signature = hash_hmac( 'sha256', $token_data, TAM_SECRET_KEY );
                 $auth_token = base64_encode( $token_data . '::' . $signature );
@@ -204,11 +205,40 @@ function tam_validate_user_authentication() {
 
                     $data = json_decode( $token_data, true );
 
-                    if ( is_array( $data ) && isset( $data['email'], $data['tenant_id'], $data['tenant_name'] ) ) {
-                        $email     = $data['email'];
-                        $tenant_id = intval( $data['tenant_id'] );
+                    if ( is_array( $data ) && isset( $data['email'], $data['tenant_id'], $data['tenant_name'], $data['last_activity'] ) ) {
+                        $email         = $data['email'];
+                        $tenant_id     = intval( $data['tenant_id'] );
+                        $last_activity = intval( $data['last_activity'] );
+                        $current_time  = time();
 
-                        // Re-validate the user's email against the tenant's allowed emails or domains
+                        // Check for inactivity (15 minutes = 900 seconds)
+                        if ( ( $current_time - $last_activity ) > 900 ) { // 15 minutes
+                            error_log( "[TAM_DEBUG] User inactive for over 15 minutes. Logging out." );
+
+                            // Clear the authentication cookie
+                            setcookie( 'tam_user_token', '', time() - 3600, '/', COOKIE_DOMAIN, is_ssl(), true );
+
+                            return false;
+                        }
+
+                        // Update last_activity
+                        $data['last_activity'] = $current_time;
+                        $updated_token_data  = json_encode( $data );
+                        $updated_signature    = hash_hmac( 'sha256', $updated_token_data, TAM_SECRET_KEY );
+                        $updated_auth_token   = base64_encode( $updated_token_data . '::' . $updated_signature );
+
+                        // Update the cookie with the new token
+                        setcookie( 'tam_user_token', $updated_auth_token, array(
+                            'expires'  => time() + 3600 * 24 * 30, // 30 days
+                            'path'     => '/',
+                            'secure'   => is_ssl(),
+                            'httponly' => true,
+                            'samesite' => 'Lax',
+                        ) );
+
+                        error_log( "[TAM_DEBUG] User is active. Updated last_activity timestamp." );
+
+                        // Re-validate user's email against the tenant's allowed emails or domains
                         $access_type = get_post_meta( $tenant_id, '_tam_tenant_access_type', true );
                         if ( 'email' === $access_type ) {
                             $allowed_emails = get_post_meta( $tenant_id, '_tam_tenant_emails', false );
@@ -251,3 +281,5 @@ function tam_validate_user_authentication() {
 
     return false;
 }
+
+?>
