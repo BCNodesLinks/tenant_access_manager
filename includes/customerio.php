@@ -14,8 +14,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 /**
  * Initialize Customer.io Client
  *
- * Retrieves API credentials from constants and initializes the Customer.io client.
- *
  * @return \Customerio\Client|null The initialized Customer.io client or null on failure.
  */
 function tam_get_customerio_client() {
@@ -33,7 +31,10 @@ function tam_get_customerio_client() {
 
     try {
         // Initialize the Customer.io client with Site API Key and Site ID
-        $client = new \Customerio\Client( $api_key, $site_id, [ 'region' => $region ] );
+        $client = new \Customerio\Client( $api_key, $site_id, [ 
+            'region' => $region,
+            'timeout' => 10, // Set timeout to 10 seconds
+        ] );
 
         // Set App API Key for transactional emails if defined
         if ( ! empty( $app_key ) ) {
@@ -47,6 +48,7 @@ function tam_get_customerio_client() {
         return null;
     }
 }
+
 
 /**
  * Update Customer.io Profile

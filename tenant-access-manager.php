@@ -1,10 +1,10 @@
 <?php
-/*
-Plugin Name: Tenant Access Manager
-Description: Allows admin to create tenants with access to specific resources and restricts site access until email confirmation.
-Version: 1.9
-Author: Ben Campbell
-*/
+/**
+ * Plugin Name: Tenant Access Manager
+ * Description: Allows admin to create tenants with access to specific resources and restricts site access until email confirmation.
+ * Version: 1.9
+ * Author: Ben Campbell
+ */
 
 if ( ! defined( 'ABSPATH' ) ) {
     exit; // Exit if accessed directly
@@ -28,7 +28,8 @@ define( 'CUSTOMERIO_SITE_ID', getenv( 'CUSTOMERIO_SITE_ID' ) );
 define( 'CUSTOMERIO_APP_KEY', getenv( 'CUSTOMERIO_APP_KEY' ) ); // If applicable
 define( 'CUSTOMERIO_REGION', getenv( 'CUSTOMERIO_REGION' ) ); // or set a default
 
-The above are all set in wp-config */
+The above are all set in wp-config.php
+*/
 
 // Include the Composer autoloader
 if ( file_exists( TAM_PLUGIN_DIR . 'vendor/autoload.php' ) ) {
