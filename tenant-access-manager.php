@@ -10,6 +10,9 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit; // Exit if accessed directly
 }
 
+// Start output buffering to prevent accidental output
+ob_start();
+
 // Define plugin directory and URL
 define( 'TAM_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'TAM_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
@@ -51,11 +54,11 @@ require_once TAM_PLUGIN_DIR . 'includes/meta-boxes.php';
 // Include Shortcodes
 require_once TAM_PLUGIN_DIR . 'includes/shortcodes.php';
 
+// Include Customer.io Integration BEFORE Access Control
+require_once TAM_PLUGIN_DIR . 'includes/customerio.php';
+
 // Include Authentication Handlers
 require_once TAM_PLUGIN_DIR . 'includes/auth.php';
-
-// **Include Customer.io Integration BEFORE Access Control**
-require_once TAM_PLUGIN_DIR . 'includes/customerio.php';
 
 // Include Access Control
 require_once TAM_PLUGIN_DIR . 'includes/access-control.php';
@@ -101,4 +104,10 @@ add_action( 'init', function() {
     }
 } );
 
-?>
+// Flush the output buffer on shutdown
+add_action( 'shutdown', 'tam_flush_output_buffer_main' );
+function tam_flush_output_buffer_main() {
+    if ( ob_get_length() ) {
+        ob_end_flush();
+    }
+}
