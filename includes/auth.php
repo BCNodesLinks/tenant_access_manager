@@ -1,6 +1,4 @@
 <?php
-// includes/auth.php
-
 /**
  * Tenant Access Manager - Authentication Handlers
  *
@@ -159,10 +157,11 @@ function tam_handle_logout() {
                 ) );
             }
 
-            // Redirect the user to the login page after successful logout
+            // Redirect the user to the login page after successful logout with auto_logout parameter
             $login_page = get_page_by_path( 'login' );
             if ( $login_page ) {
-                wp_redirect( get_permalink( $login_page->ID ) );
+                $redirect_url = add_query_arg( 'auto_logout', '1', get_permalink( $login_page->ID ) );
+                wp_redirect( $redirect_url );
                 exit;
             } else {
                 // Display an error if the login page is not found
@@ -251,3 +250,4 @@ function tam_validate_user_authentication() {
 
     return false;
 }
+?>

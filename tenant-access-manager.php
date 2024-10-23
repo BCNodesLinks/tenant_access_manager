@@ -60,6 +60,9 @@ require_once TAM_PLUGIN_DIR . 'includes/customerio.php';
 // Include Access Control
 require_once TAM_PLUGIN_DIR . 'includes/access-control.php';
 
+// Include Toast Notification
+require_once TAM_PLUGIN_DIR . 'includes/toast.php';
+
 // Activation and Deactivation Hooks
 function tam_activate_plugin() {
     // Trigger CPT registration on activation
