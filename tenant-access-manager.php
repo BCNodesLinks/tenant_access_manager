@@ -22,15 +22,14 @@ if ( ! defined( 'TAM_EVENT_PREFIX' ) ) {
 define( 'TAM_CUSTOMERIO_TRANSACTIONAL_TEMPLATE_ID', '3' ); // Replace with your actual template ID
 
 /*
-
 define( 'TAM_SECRET_KEY', getenv( 'TAM_SECRET_KEY' ) );
 define( 'CUSTOMERIO_API_KEY', getenv( 'CUSTOMERIO_API_KEY' ) );
 define( 'CUSTOMERIO_SITE_ID', getenv( 'CUSTOMERIO_SITE_ID' ) );
 define( 'CUSTOMERIO_APP_KEY', getenv( 'CUSTOMERIO_APP_KEY' ) ); // If applicable
 define( 'CUSTOMERIO_REGION', getenv( 'CUSTOMERIO_REGION' ) ); // or set a default
 
-The above are all set in wp-config */
-
+The above are all set in wp-config.php
+*/
 
 // Include the Composer autoloader
 if ( file_exists( TAM_PLUGIN_DIR . 'vendor/autoload.php' ) ) {
@@ -55,11 +54,14 @@ require_once TAM_PLUGIN_DIR . 'includes/shortcodes.php';
 // Include Authentication Handlers
 require_once TAM_PLUGIN_DIR . 'includes/auth.php';
 
-// **Include Customer.io Integration BEFORE Access Control**
+// Include Customer.io Integration BEFORE Access Control
 require_once TAM_PLUGIN_DIR . 'includes/customerio.php';
 
 // Include Access Control
 require_once TAM_PLUGIN_DIR . 'includes/access-control.php';
+
+// Include Toast Notification
+require_once TAM_PLUGIN_DIR . 'includes/toast.php';
 
 // Activation and Deactivation Hooks
 function tam_activate_plugin() {
@@ -80,6 +82,34 @@ function tam_initialize_plugin() {
 }
 add_action( 'plugins_loaded', 'tam_initialize_plugin' );
 
+// Enqueue Auto-Logout Script
+function tam_enqueue_auto_logout_script() {
+    // Only enqueue for authenticated users
+    if ( tam_validate_user_authentication() ) {
+        // Define the logout URL with nonce
+        $login_page = get_page_by_path( 'login' );
+        if ( $login_page ) {
+            $logout_url = add_query_arg( array(
+                'tam_logout'       => '1',
+                'tam_logout_nonce' => wp_create_nonce( 'tam_logout_action' ),
+            ), get_permalink( $login_page->ID ) );
+        } else {
+            $logout_url = site_url( '/login/' ); // Fallback URL
+        }
+
+        // Enqueue the auto-logout script
+        wp_enqueue_script( 'tam-auto-logout', TAM_PLUGIN_URL . 'includes/assets/js/auto-logout.js', array(), '1.0', true );
+
+        // Pass the inactivity time and logout URL to the script
+        wp_localize_script( 'tam-auto-logout', 'tamSettings', array(
+            'inactivityTime' => 1 * 60 * 1000, // 60 minutes in milliseconds
+            'logoutUrl'      => esc_url_raw( $logout_url ),
+        ) );
+    }
+}
+add_action( 'wp_enqueue_scripts', 'tam_enqueue_auto_logout_script' );
+
+// Log Customer.io Client Initialization
 add_action( 'init', function() {
     $client = tam_get_customerio_client();
     if ( $client ) {
