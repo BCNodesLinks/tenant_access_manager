@@ -128,11 +128,10 @@ function tam_handle_logout() {
                 ) );
             }
 
-            // Redirect the user to the login page after successful logout with auto_logout parameter
+            // Redirect the user to the login page after successful logout
             $login_page = get_page_by_path( 'login' );
             if ( $login_page ) {
-                //$redirect_url = add_query_arg( 'auto_logout', '1', get_permalink( $login_page->ID ) );
-                wp_redirect( $redirect_url );
+                wp_redirect( get_permalink( $login_page->ID ) );
                 exit;
             } else {
                 // Display an error if the login page is not found
@@ -152,23 +151,34 @@ add_action( 'init', 'tam_handle_logout' );
  * Get Current User Tenant Data
  *
  * This function retrieves the tenant data for the currently logged-in user.
+ * It uses a static variable to cache the data within a single request.
  *
  * @return array|false Returns user data array if logged in, false otherwise.
  */
 function tam_get_current_user_tenant_data() {
+    static $cached_data = null;
+
+    if ( null !== $cached_data ) {
+        return $cached_data;
+    }
+
     if ( is_user_logged_in() ) {
         $user_id = get_current_user_id();
-        $email = wp_get_current_user()->user_email;
+        $user = wp_get_current_user();
+        $email = $user->user_email;
         $tenant_id = get_user_meta( $user_id, 'tenant_id', true );
+
+        // Cache tenant name to avoid multiple calls
         $tenant_name = tam_get_tenant_name( $tenant_id );
 
-        return array(
+        $cached_data = array(
             'email'       => $email,
             'tenant_id'   => $tenant_id,
             'tenant_name' => $tenant_name,
         );
+
+        return $cached_data;
     }
 
     return false;
 }
-?>

@@ -16,7 +16,7 @@
  * It restricts site access for unauthenticated users, allows access to specific pages, and handles post-type specific access.
  */
 function tam_consolidated_access_control() {
-  
+
     // Check if the current user is an administrator
     if ( current_user_can( 'administrator' ) ) {
         return; // Allow admins unrestricted access
@@ -35,10 +35,9 @@ function tam_consolidated_access_control() {
             $current_id = get_the_ID();
             $flow_name = get_the_title( $current_id );
             $items = get_post_meta( $tenant_id, $meta_key, true );
-           if ( $items ) {
+            if ( $items ) {
                 $item_ids = is_array( $items ) ? array_map( 'intval', $items ) : array( intval( $items ) );
 
-                
                 if ( ! in_array( $current_id, $item_ids, true ) ) {
                     wp_redirect( home_url( '/no-access/' ) );
                     exit;
@@ -52,7 +51,6 @@ function tam_consolidated_access_control() {
                 wp_redirect( home_url( '/no-access/' ) );
                 exit;
             }
-        } else {
         }
     } else {
         // User is not authenticated
@@ -109,8 +107,6 @@ add_action( 'template_redirect', 'tam_consolidated_access_control', 5 );
  * @param WP_Query $query The WP_Query instance (passed by reference).
  */
 function tam_unified_pre_get_posts_filter( $query ) {
-    static $processed_post_types = array();
-
     if ( is_admin() || ! $query->is_main_query() ) {
         return;
     }
@@ -118,32 +114,18 @@ function tam_unified_pre_get_posts_filter( $query ) {
     // Define the post types to filter
     $target_post_types = array( 'flow', 'resource', 'rep', 'post' );
 
-    // Identify if the current query is for one of the target post types
-    $current_post_type = '';
+    // Check if the query is for one of the target post types
+    $current_post_type = $query->get( 'post_type' );
 
-    foreach ( $target_post_types as $type ) {
-        if ( is_post_type_archive( $type ) ) {
-            $current_post_type = $type;
-            break;
-        }
-    }
-
-    if ( empty( $current_post_type ) ) {
+    if ( ! in_array( $current_post_type, $target_post_types, true ) ) {
         return;
     }
-
-    // Prevent re-processing the same post type within a single request
-    if ( in_array( $current_post_type, $processed_post_types, true ) ) {
-        return;
-    }
-
-    // Mark the current post type as processed
-    $processed_post_types[] = $current_post_type;
 
     $auth_data = tam_get_current_user_tenant_data();
+
     if ( $auth_data ) {
         $tenant_id = intval( $auth_data['tenant_id'] );
-        
+
         // Determine the meta_key based on post type
         switch ( $current_post_type ) {
             case 'flow':
@@ -163,36 +145,23 @@ function tam_unified_pre_get_posts_filter( $query ) {
         }
 
         $items = get_post_meta( $tenant_id, $meta_key, true );
-        
+
         if ( $items ) {
             $item_ids = is_array( $items ) ? array_map( 'intval', $items ) : array( intval( $items ) );
-            
+
             if ( 'allowed_tenants' === $meta_key ) {
                 $meta_query = array(
                     'relation' => 'OR',
-                    // Condition 1: allowed_tenants contains the current tenant ID
                     array(
                         'key'     => 'allowed_tenants',
-                        'value'   => '"' . $tenant_id . '"', // Serialized array requires quotes
+                        'value'   => '"' . $tenant_id . '"',
                         'compare' => 'LIKE',
                     ),
-                    // Condition 2: allowed_tenants is an empty string (globally visible)
-                    array(
-                        'key'     => 'allowed_tenants',
-                        'value'   => '',
-                        'compare' => '=',
-                    ),
-                    // Condition 3: allowed_tenants does not exist (additional safety)
                     array(
                         'key'     => 'allowed_tenants',
                         'compare' => 'NOT EXISTS',
                     ),
                 );
-
-                // Merge with existing meta queries if present
-                if ( isset( $query->query_vars['meta_query'] ) && is_array( $query->query_vars['meta_query'] ) ) {
-                    $meta_query = array_merge( $query->query_vars['meta_query'], $meta_query );
-                }
 
                 $query->set( 'meta_query', $meta_query );
             } else {
@@ -202,11 +171,6 @@ function tam_unified_pre_get_posts_filter( $query ) {
         } else {
             if ( 'allowed_tenants' === $meta_key ) {
                 $query->set( 'meta_query', array(
-                    array(
-                        'key'     => 'allowed_tenants',
-                        'value'   => '',
-                        'compare' => '=',
-                    ),
                     array(
                         'key'     => 'allowed_tenants',
                         'compare' => 'NOT EXISTS',
@@ -231,64 +195,44 @@ add_action( 'pre_get_posts', 'tam_unified_pre_get_posts_filter' );
  * @param WP_Query $query The Elementor query instance.
  */
 function tam_filter_elementor_blog_posts_by_query_id( $query ) {
-    // Initial log to confirm the function is triggered
-    
-    static $is_running = false;
-
-    if ( $is_running ) {
-        // Prevent recursion
+    // Avoid infinite loops
+    if ( $query->get( 'tam_modified' ) ) {
         return;
     }
 
-    $is_running = true;
-
-    // Ensure we're modifying the 'post' post type query
-    if ( isset( $query->query_vars['post_type'] ) && ( 'post' === $query->query_vars['post_type'] || ( is_array( $query->query_vars['post_type'] ) && in_array( 'post', $query->query_vars['post_type'] ) ) ) ) {
-        $auth_data = tam_get_current_user_tenant_data();
-
-        if ( $auth_data ) {
-            $tenant_id = intval( $auth_data['tenant_id'] );
-            
-            // Define meta query with three conditions
-            $meta_query = array(
-                'relation' => 'OR',
-                // Condition 1: allowed_tenants contains the current tenant ID
-                array(
-                    'key'     => 'allowed_tenants',
-                    'value'   => '"' . $tenant_id . '"', // Serialized array requires quotes
-                    'compare' => 'LIKE',
-                ),
-                // Condition 2: allowed_tenants is an empty string (globally visible)
-                array(
-                    'key'     => 'allowed_tenants',
-                    'value'   => '',
-                    'compare' => '=',
-                ),
-                // Condition 3: allowed_tenants does not exist (additional safety)
-                array(
-                    'key'     => 'allowed_tenants',
-                    'compare' => 'NOT EXISTS',
-                ),
-            );
-
-            // Merge with existing meta queries if any
-            if ( isset( $query->query_vars['meta_query'] ) && is_array( $query->query_vars['meta_query'] ) ) {
-                $meta_query = array_merge( $query->query_vars['meta_query'], $meta_query );
-            }
-
-            // Set the new meta_query
-            $query->set( 'meta_query', $meta_query );
-        } else {
-            // If not authenticated, hide all posts
-            $query->set( 'post__in', array( 0 ) );
-        }
-    } else {
-        
+    // Only modify queries for 'post' post type
+    if ( 'post' !== $query->get( 'post_type' ) ) {
+        return;
     }
 
-    $is_running = false;
+    $auth_data = tam_get_current_user_tenant_data();
+
+    if ( $auth_data ) {
+        $tenant_id = intval( $auth_data['tenant_id'] );
+
+        $meta_query = array(
+            'relation' => 'OR',
+            array(
+                'key'     => 'allowed_tenants',
+                'value'   => '"' . $tenant_id . '"',
+                'compare' => 'LIKE',
+            ),
+            array(
+                'key'     => 'allowed_tenants',
+                'compare' => 'NOT EXISTS',
+            ),
+        );
+
+        $query->set( 'meta_query', $meta_query );
+    } else {
+        // If not authenticated, prevent any posts from being shown
+        $query->set( 'post__in', array( 0 ) );
+    }
+
+    // Set a flag to prevent reprocessing
+    $query->set( 'tam_modified', true );
 }
-add_action( 'elementor/query/tenant_blog_posts', 'tam_filter_elementor_blog_posts_by_query_id', 10, 1 );
+add_action( 'elementor/query/tenant_blog_posts', 'tam_filter_elementor_blog_posts_by_query_id' );
 
 /**
  * Track Flow View Event
@@ -308,17 +252,8 @@ function tam_track_flow_view_event( $flow_id, $flow_name ) {
             'flow_id'   => $flow_id,
             'flow_name' => $flow_name,
         ) );
-
-    } else {
-       
     }
 }
-
-/**
- * Additional Access Control Hooks or Functions
- *
- * Add any other access control related functions here.
- */
 
 /**
  * Customize Elementor Query to Filter Flows by Tenant
@@ -328,38 +263,35 @@ function tam_track_flow_view_event( $flow_id, $flow_name ) {
  * @param WP_Query $query The Elementor query instance.
  */
 function tam_filter_elementor_flows_by_query_id( $query ) {
-    static $is_running = false;
-
-    if ( $is_running ) {
+    // Avoid infinite loops
+    if ( $query->get( 'tam_modified' ) ) {
         return;
     }
 
-    $is_running = true;
-
-    // Ensure we're modifying the 'flow' post type query
-    if ( isset( $query->query_vars['post_type'] ) ) {
-        $post_type = $query->query_vars['post_type'];
-
-        if ( ( is_array( $post_type ) && in_array( 'flow', $post_type ) ) || $post_type === 'flow' ) {
-            $auth_data = tam_get_current_user_tenant_data();
-            if ( $auth_data ) {
-                $tenant_id = intval( $auth_data['tenant_id'] );
-                $flows = get_post_meta( $tenant_id, 'flows', true );
-
-                if ( $flows ) {
-                    $flow_ids = is_array( $flows ) ? array_map( 'intval', $flows ) : array( intval( $flows ) );
-                    $query->set( 'post__in', $flow_ids );
-                    $query->set( 'orderby', 'post__in' ); // Preserve order
-                } else {
-                    $query->set( 'post__in', array( 0 ) ); // No flows
-                }
-            } else {
-                $query->set( 'post__in', array( 0 ) ); // Not authenticated
-            }
-        }
+    // Only modify queries for 'flow' post type
+    if ( 'flow' !== $query->get( 'post_type' ) ) {
+        return;
     }
 
-    $is_running = false;
+    $auth_data = tam_get_current_user_tenant_data();
+
+    if ( $auth_data ) {
+        $tenant_id = intval( $auth_data['tenant_id'] );
+        $flows = get_post_meta( $tenant_id, 'flows', true );
+
+        if ( $flows ) {
+            $flow_ids = is_array( $flows ) ? array_map( 'intval', $flows ) : array( intval( $flows ) );
+            $query->set( 'post__in', $flow_ids );
+            $query->set( 'orderby', 'post__in' ); // Preserve order
+        } else {
+            $query->set( 'post__in', array( 0 ) ); // No flows
+        }
+    } else {
+        $query->set( 'post__in', array( 0 ) ); // Not authenticated
+    }
+
+    // Set a flag to prevent reprocessing
+    $query->set( 'tam_modified', true );
 }
 add_action( 'elementor/query/tenant_flows', 'tam_filter_elementor_flows_by_query_id' );
 
@@ -371,38 +303,35 @@ add_action( 'elementor/query/tenant_flows', 'tam_filter_elementor_flows_by_query
  * @param WP_Query $query The Elementor query instance.
  */
 function tam_filter_elementor_resources_by_query_id( $query ) {
-    static $is_running = false;
-
-    if ( $is_running ) {
+    // Avoid infinite loops
+    if ( $query->get( 'tam_modified' ) ) {
         return;
     }
 
-    $is_running = true;
-
-    // Ensure we're modifying the 'resource' post type query
-    if ( isset( $query->query_vars['post_type'] ) ) {
-        $post_type = $query->query_vars['post_type'];
-
-        if ( ( is_array( $post_type ) && in_array( 'resource', $post_type ) ) || $post_type === 'resource' ) {
-            $auth_data = tam_get_current_user_tenant_data();
-            if ( $auth_data ) {
-                $tenant_id = intval( $auth_data['tenant_id'] );
-                $resources = get_post_meta( $tenant_id, 'resources', true );
-
-                if ( $resources ) {
-                    $resource_ids = is_array( $resources ) ? array_map( 'intval', $resources ) : array( intval( $resources ) );
-                    $query->set( 'post__in', $resource_ids );
-                    $query->set( 'orderby', 'post__in' ); // Preserve order
-                } else {
-                    $query->set( 'post__in', array( 0 ) ); // No resources
-                }
-            } else {
-                $query->set( 'post__in', array( 0 ) ); // Not authenticated
-            }
-        }
+    // Only modify queries for 'resource' post type
+    if ( 'resource' !== $query->get( 'post_type' ) ) {
+        return;
     }
 
-    $is_running = false;
+    $auth_data = tam_get_current_user_tenant_data();
+
+    if ( $auth_data ) {
+        $tenant_id = intval( $auth_data['tenant_id'] );
+        $resources = get_post_meta( $tenant_id, 'resources', true );
+
+        if ( $resources ) {
+            $resource_ids = is_array( $resources ) ? array_map( 'intval', $resources ) : array( intval( $resources ) );
+            $query->set( 'post__in', $resource_ids );
+            $query->set( 'orderby', 'post__in' ); // Preserve order
+        } else {
+            $query->set( 'post__in', array( 0 ) ); // No resources
+        }
+    } else {
+        $query->set( 'post__in', array( 0 ) ); // Not authenticated
+    }
+
+    // Set a flag to prevent reprocessing
+    $query->set( 'tam_modified', true );
 }
 add_action( 'elementor/query/tenant_resources', 'tam_filter_elementor_resources_by_query_id' );
 
@@ -414,38 +343,34 @@ add_action( 'elementor/query/tenant_resources', 'tam_filter_elementor_resources_
  * @param WP_Query $query The Elementor query instance.
  */
 function tam_filter_elementor_reps_by_query_id( $query ) {
-    static $is_running = false;
-
-    if ( $is_running ) {
-       return;
+    // Avoid infinite loops
+    if ( $query->get( 'tam_modified' ) ) {
+        return;
     }
 
-    $is_running = true;
+    // Only modify queries for 'rep' post type
+    if ( 'rep' !== $query->get( 'post_type' ) ) {
+        return;
+    }
 
-    // Ensure we're modifying the 'rep' post type query
-    if ( isset( $query->query_vars['post_type'] ) ) {
-        $post_type = $query->query_vars['post_type'];
+    $auth_data = tam_get_current_user_tenant_data();
 
-        if ( ( is_array( $post_type ) && in_array( 'rep', $post_type ) ) || $post_type === 'rep' ) {
-            $auth_data = tam_get_current_user_tenant_data();
-            if ( $auth_data ) {
-                $tenant_id = intval( $auth_data['tenant_id'] );
-                $reps = get_post_meta( $tenant_id, 'reps', true );
+    if ( $auth_data ) {
+        $tenant_id = intval( $auth_data['tenant_id'] );
+        $reps = get_post_meta( $tenant_id, 'reps', true );
 
-                if ( $reps ) {
-                    $rep_ids = is_array( $reps ) ? array_map( 'intval', $reps ) : array( intval( $reps ) );
-                    $query->set( 'post__in', $rep_ids );
-                    $query->set( 'orderby', 'post__in' ); // Preserve order
-                } else {
-                    $query->set( 'post__in', array( 0 ) ); // No reps
-                }
-            } else {
-                $query->set( 'post__in', array( 0 ) ); // Not authenticated
-            }
+        if ( $reps ) {
+            $rep_ids = is_array( $reps ) ? array_map( 'intval', $reps ) : array( intval( $reps ) );
+            $query->set( 'post__in', $rep_ids );
+            $query->set( 'orderby', 'post__in' ); // Preserve order
+        } else {
+            $query->set( 'post__in', array( 0 ) ); // No reps
         }
+    } else {
+        $query->set( 'post__in', array( 0 ) ); // Not authenticated
     }
 
-    $is_running = false;
+    // Set a flag to prevent reprocessing
+    $query->set( 'tam_modified', true );
 }
 add_action( 'elementor/query/tenant_reps', 'tam_filter_elementor_reps_by_query_id' );
-?>
