@@ -105,7 +105,7 @@ function tam_get_authenticated_tenant_logo_url( $size = 'full' ) {
     // Start QM Timer for Tenant Logo Retrieval
     do_action( 'qm/start', 'Tenant Logo Retrieval' );
 
-    $auth_data = tam_validate_user_authentication();
+    $auth_data = tam_get_current_user_tenant_data();
     if ( $auth_data ) {
         $tenant_id = intval( $auth_data['tenant_id'] );
         // Get logo ID from post meta
@@ -125,30 +125,30 @@ function tam_get_authenticated_tenant_logo_url( $size = 'full' ) {
 }
 
 /**
- * Get Authenticated Tenant Logo URL
+ * Get Authenticated Tenant Background URL
  *
- * Retrieves the logo URL for the authenticated tenant.
+ * Retrieves the background image URL for the authenticated tenant.
  *
  * @param string $size Image size (default 'full').
- * @return string URL of the tenant logo or default logo.
+ * @return string URL of the tenant background or default background.
  */
 function tam_get_authenticated_tenant_background_url( $size = 'full' ) {
-    // Start QM Timer for Tenant Logo Retrieval
+    // Start QM Timer for Tenant Background Retrieval
     do_action( 'qm/start', 'Tenant Background Retrieval' );
 
-    $auth_data = tam_validate_user_authentication();
+    $auth_data = tam_get_current_user_tenant_data();
     if ( $auth_data ) {
         $tenant_id = intval( $auth_data['tenant_id'] );
-        // Get logo ID from post meta
-        $logo_id = get_post_meta( $tenant_id, 'tenant_background', true );
-        if ( $logo_id ) {
-            $logo_url = wp_get_attachment_image_url( $logo_id, $size );
+        // Get background ID from post meta
+        $background_id = get_post_meta( $tenant_id, 'tenant_background', true );
+        if ( $background_id ) {
+            $background_url = wp_get_attachment_image_url( $background_id, $size );
             // Stop QM Timer
             do_action( 'qm/stop', 'Tenant Background Retrieval' );
-            return $logo_url;
+            return $background_url;
         }
     }
-    // Return default logo URL if tenant logo not set or user not authenticated
+    // Return default background URL if tenant background not set or user not authenticated
     $default_background_url = TAM_PLUGIN_URL . 'assets/images/default-background.png'; // Adjust the path as needed
     // Stop QM Timer
     do_action( 'qm/stop', 'Tenant Background Retrieval' );
@@ -212,4 +212,10 @@ function tam_get_tenant_name( $tenant_id ) {
     return 'Unknown Tenant';
 }
 
+function tam_hide_admin_bar_for_viewers() {
+    if ( is_user_logged_in() && current_user_can( 'viewer' ) && ! current_user_can( 'administrator' ) ) {
+        show_admin_bar( false );
+    }
+}
+add_action( 'after_setup_theme', 'tam_hide_admin_bar_for_viewers' );
 ?>

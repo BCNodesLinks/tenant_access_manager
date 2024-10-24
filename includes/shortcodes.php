@@ -33,52 +33,68 @@ function tam_email_entry_form() {
             if ( ! $tenant_id ) {
                 // If no tenant found via email, try to retrieve tenant ID based on email domain
                 if ( strpos( $email, '@' ) !== false ) {
-                    list( $user, $domain ) = explode( '@', $email );
+                    list( $user_part, $domain ) = explode( '@', $email );
                     $tenant_id = tam_get_tenant_by_domain( $domain );
                 }
             }
 
             if ( $tenant_id ) {
-                // Proceed with generating token and sending email
-                $token = bin2hex( random_bytes( 32 ) );
-                $expiration = time() + 24 * HOUR_IN_SECONDS;
-                $data = array(
-                    'email'      => $email,
-                    'expiration' => $expiration,
-                );
+                // Check if a user exists with this email
+                $user = get_user_by( 'email', $email );
 
-                // Log token generation and transient setting for debugging
-                error_log( 'Generated token: ' . $token . ' for email: ' . $email );
-                if ( set_transient( 'tam_email_token_' . $token, $data, 24 * HOUR_IN_SECONDS ) ) {
-                    error_log( 'Transient set for token: ' . $token );
+                if ( $user ) {
+                    $user_id = $user->ID;
                 } else {
-                    error_log( 'Failed to set transient for token: ' . $token );
+                    // User does not exist, do not create a new user
+                    $user_id = false;
                 }
 
-                // Generate the confirmation link
-                $confirm_link = add_query_arg( array( 'tam_confirm_email' => $token ), site_url( '/login/' ) );
+                if ( $user_id ) {
+                    // Proceed with generating token and sending email
+                    $token = bin2hex( random_bytes( 32 ) );
+                    $expiration = time() + 24 * HOUR_IN_SECONDS;
+                    $data = array(
+                        'user_id'    => $user_id,
+                        'expiration' => $expiration,
+                    );
 
-                // Define your transactional template ID using the constant
-                $transactional_template_id = TAM_CUSTOMERIO_TRANSACTIONAL_TEMPLATE_ID;
+                    // Log token generation and transient setting for debugging
+                    error_log( 'Generated token: ' . $token . ' for email: ' . $email );
+                    if ( set_transient( 'tam_email_token_' . $token, $data, 24 * HOUR_IN_SECONDS ) ) {
+                        error_log( 'Transient set for token: ' . $token );
+                    } else {
+                        error_log( 'Failed to set transient for token: ' . $token );
+                    }
 
-                // Data to pass to the transactional email template
-                $email_data = array(
-                    'confirmation_url' => esc_url( $confirm_link ),
-                    'timestamp'        => time(),
-                );
+                    // Generate the confirmation link
+                    $confirm_link = add_query_arg( array( 'tam_confirm_email' => $token ), site_url( '/login/' ) );
 
-                // Send transactional email
-                tam_send_transactional_email( $email, $transactional_template_id, $email_data );
+                    // Define your transactional template ID using the constant
+                    $transactional_template_id = TAM_CUSTOMERIO_TRANSACTIONAL_TEMPLATE_ID;
 
-                // Inform the user that a confirmation link has been sent
+                    // Data to pass to the transactional email template
+                    $email_data = array(
+                        'confirmation_url' => esc_url( $confirm_link ),
+                        'timestamp'        => time(),
+                    );
+
+                    // Send transactional email via Customer.io
+                    tam_send_transactional_email( $email, $transactional_template_id, $email_data );
+
+                    // Log that the email was sent
+                    error_log( 'Magic login link sent to email: ' . $email );
+                } else {
+                    // User does not exist, do not send email
+                    error_log( 'No user account associated with email: ' . $email . '. Magic link not sent.' );
+                }
+
+                // Inform the user that a confirmation link has been sent (regardless of whether it was)
                 $output .= '<p>If your email is registered, you will receive a confirmation link shortly.</p>';
+
             } else {
                 // No tenant found for the email or domain
-                // Optionally, you can display a generic message to avoid revealing whether the email is registered
+                // Inform the user that a confirmation link has been sent (regardless of whether it was)
                 $output .= '<p>If your email is registered, you will receive a confirmation link shortly.</p>';
-
-                // Alternatively, display a specific message
-                // $output .= '<p>No tenant found for your email. Please contact support.</p>';
 
                 // Log for debugging purposes
                 error_log( 'No tenant found for email: ' . $email . '. Magic link not sent.' );
@@ -146,7 +162,7 @@ function tam_tenant_logo_shortcode( $atts ) {
 add_shortcode( 'tam_tenant_logo', 'tam_tenant_logo_shortcode' );
 
 /**
- * Tenant Logo Shortcode
+ * Tenant Background Shortcode
  */
 function tam_tenant_background_shortcode( $atts ) {
     $atts = shortcode_atts( array(
@@ -184,27 +200,22 @@ function tam_tenant_name_shortcode( $atts ) {
         'class' => 'tam-tenant-name', // Default CSS class
     ), $atts, 'tam_tenant_name' );
 
-    // Log that the shortcode has been triggered
-    error_log( 'tam_tenant_name_shortcode triggered.' );
 
     // Retrieve authentication data
-    $auth_data = tam_validate_user_authentication();
+    $auth_data = tam_get_current_user_tenant_data();
 
     if ( $auth_data ) {
-        error_log( 'Authentication successful.' );
-
+       
         // Extract and sanitize tenant ID
         $tenant_id = intval( $auth_data['tenant_id'] );
-        error_log( 'Authenticated Tenant ID: ' . $tenant_id );
-
+        
         // Retrieve tenant post
         $tenant_post = get_post( $tenant_id );
 
         if ( $tenant_post && 'tenant' === $tenant_post->post_type ) { // Assuming 'tenant' is the post type
             // Get the tenant name (post title)
             $tenant_name = get_the_title( $tenant_id );
-            error_log( 'Retrieved Tenant Name: ' . $tenant_name );
-
+        
             // Prepare the HTML output with the tenant name
             $html = '<span class="' . esc_attr( $atts['class'] ) . '">' . esc_html( $tenant_name ) . '</span>';
 
