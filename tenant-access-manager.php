@@ -66,6 +66,9 @@ require_once TAM_PLUGIN_DIR . 'includes/toast.php';
 // Include User Profile Modifications
 require_once TAM_PLUGIN_DIR . 'includes/user-profile.php';
 
+// Include Admin Access Control
+require_once TAM_PLUGIN_DIR . 'includes/admin-access.php';
+
 // Activation and Deactivation Hooks
 function tam_activate_plugin() {
     // Trigger CPT registration on activation
@@ -117,18 +120,62 @@ function tam_enqueue_auto_logout_script() {
         // Enqueue the auto-logout script
         wp_enqueue_script( 'tam-auto-logout', TAM_PLUGIN_URL . 'includes/assets/js/auto-logout.js', array(), '1.0', true );
 
+        // Determine inactivity time based on session expiration
+        $expiration = ( is_user_logged_in() && ! empty( $_COOKIE[ LOGGED_IN_COOKIE ] ) ) ? tam_get_current_session_expiration() : 30 * MINUTE_IN_SECONDS;
+        $inactivity_time = $expiration * 1000; // Convert to milliseconds
+
         // Pass the inactivity time and logout URL to the script
         wp_localize_script( 'tam-auto-logout', 'tamSettings', array(
-            'inactivityTime' => 60 * 60 * 1000, // 60 minutes in milliseconds
+            'inactivityTime' => $inactivity_time,
             'logoutUrl'      => esc_url_raw( $logout_url ),
         ) );
     }
 }
 add_action( 'wp_enqueue_scripts', 'tam_enqueue_auto_logout_script' );
 
+// Set Authentication Cookie Expiration
+/**
+ * Set Authentication Cookie Expiration
+ *
+ * This function sets the authentication cookie expiration time based on the "Remember Me" option.
+ *
+ * @param int  $expiration The expiration time in seconds.
+ * @param int  $user_id    The user ID.
+ * @param bool $remember   Whether to remember the user.
+ * @return int Modified expiration time.
+ */
+function tam_set_auth_cookie_expiration( $expiration, $user_id, $remember ) {
+    if ( $remember ) {
+        // Set expiration to 14 days if "Remember Me" is checked
+        return 14 * DAY_IN_SECONDS;
+    } else {
+        // Set expiration to 30 minutes
+        return 1 * MINUTE_IN_SECONDS;
+    }
+}
+add_filter( 'auth_cookie_expiration', 'tam_set_auth_cookie_expiration', 99, 3 );
+
+// Added Helper Function
+/**
+ * Get Current Session Expiration Time
+ *
+ * Retrieves the remaining time until the current session expires.
+ *
+ * @return int Remaining session time in seconds.
+ */
+function tam_get_current_session_expiration() {
+    if ( is_user_logged_in() && ! empty( $_COOKIE[ LOGGED_IN_COOKIE ] ) ) {
+        $cookie = wp_parse_auth_cookie( '', 'logged_in' );
+        if ( $cookie && isset( $cookie['expiration'] ) ) {
+            $remaining_time = $cookie['expiration'] - time();
+            return $remaining_time > 0 ? $remaining_time : 0;
+        }
+    }
+    // Default to 30 minutes if unable to determine
+    return 1 * MINUTE_IN_SECONDS;
+}
 
 // Log Customer.io Client Initialization
 add_action( 'init', function() {
     $client = tam_get_customerio_client();
 } );
-?>

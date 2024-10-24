@@ -146,36 +146,33 @@ function tam_unified_pre_get_posts_filter( $query ) {
 
         $items = get_post_meta( $tenant_id, $meta_key, true );
 
-        if ( $items ) {
-            $item_ids = is_array( $items ) ? array_map( 'intval', $items ) : array( intval( $items ) );
+        if ( 'allowed_tenants' === $meta_key ) {
+            // For posts, set the meta query
+            $meta_query = array(
+                'relation' => 'OR',
+                array(
+                    'key'     => 'allowed_tenants',
+                    'value'   => '"' . $tenant_id . '"',
+                    'compare' => 'LIKE',
+                ),
+                array(
+                    'key'     => 'allowed_tenants',
+                    'value'   => '',
+                    'compare' => '=',
+                ),
+                array(
+                    'key'     => 'allowed_tenants',
+                    'compare' => 'NOT EXISTS',
+                ),
+            );
 
-            if ( 'allowed_tenants' === $meta_key ) {
-                $meta_query = array(
-                    'relation' => 'OR',
-                    array(
-                        'key'     => 'allowed_tenants',
-                        'value'   => '"' . $tenant_id . '"',
-                        'compare' => 'LIKE',
-                    ),
-                    array(
-                        'key'     => 'allowed_tenants',
-                        'compare' => 'NOT EXISTS',
-                    ),
-                );
-
-                $query->set( 'meta_query', $meta_query );
-            } else {
+            $query->set( 'meta_query', $meta_query );
+        } else {
+            // For other post types, use post__in
+            if ( $items ) {
+                $item_ids = is_array( $items ) ? array_map( 'intval', $items ) : array( intval( $items ) );
                 $query->set( 'post__in', $item_ids );
                 $query->set( 'orderby', 'post__in' );
-            }
-        } else {
-            if ( 'allowed_tenants' === $meta_key ) {
-                $query->set( 'meta_query', array(
-                    array(
-                        'key'     => 'allowed_tenants',
-                        'compare' => 'NOT EXISTS',
-                    ),
-                ) );
             } else {
                 $query->set( 'post__in', array( 0 ) ); // No items assigned
             }
@@ -216,6 +213,11 @@ function tam_filter_elementor_blog_posts_by_query_id( $query ) {
                 'key'     => 'allowed_tenants',
                 'value'   => '"' . $tenant_id . '"',
                 'compare' => 'LIKE',
+            ),
+            array(
+                'key'     => 'allowed_tenants',
+                'value'   => '',
+                'compare' => '=',
             ),
             array(
                 'key'     => 'allowed_tenants',

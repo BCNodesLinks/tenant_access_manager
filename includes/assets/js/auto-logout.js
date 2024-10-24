@@ -1,30 +1,31 @@
-// assets/js/auto-logout.js
+// includes/assets/js/auto-logout.js
 
 (function () {
-  // Configuration
-  const inactivityTime = tamSettings.inactivityTime || 60 * 60 * 1000; // 60 minutes in milliseconds
-  const logoutUrl = tamSettings.logoutUrl || "/"; // Logout URL
+  // Retrieve the inactivity time and logout URL from the localized script variables
+  var inactivityTime = tamSettings.inactivityTime || 1800000; // Default to 30 minutes if not set
+  var logoutUrl = tamSettings.logoutUrl || "/";
 
-  let timer;
+  var timeout;
 
-  // Function to reset the timer
   function resetTimer() {
-    clearTimeout(timer);
-    timer = setTimeout(triggerLogout, inactivityTime);
+    clearTimeout(timeout);
+    timeout = setTimeout(function () {
+      // Append ?autologout=1 to the logoutUrl when auto-logging out
+      var autoLogoutUrl =
+        logoutUrl +
+        (logoutUrl.indexOf("?") === -1 ? "?" : "&") +
+        "autologout=1";
+      window.location.href = autoLogoutUrl;
+    }, inactivityTime);
   }
 
-  // Function to trigger logout
-  function triggerLogout() {
-    window.location.href = logoutUrl;
-  }
-
-  // List of events to consider as user activity
-  const events = ["mousemove", "keydown", "click", "scroll", "touchstart"];
-
-  // Attach event listeners for each event
-  events.forEach(function (event) {
-    window.addEventListener(event, resetTimer, false);
-  });
+  // List of events that reset the inactivity timer
+  document.addEventListener("mousemove", resetTimer);
+  document.addEventListener("keypress", resetTimer);
+  document.addEventListener("click", resetTimer);
+  document.addEventListener("scroll", resetTimer);
+  document.addEventListener("touchstart", resetTimer); // For touch devices
+  document.addEventListener("touchmove", resetTimer); // For touch devices
 
   // Initialize the timer when the script loads
   resetTimer();

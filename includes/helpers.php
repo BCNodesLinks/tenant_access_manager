@@ -195,3 +195,29 @@ function tam_hide_admin_bar_for_viewers() {
     }
 }
 add_action( 'after_setup_theme', 'tam_hide_admin_bar_for_viewers' );
+
+/**
+ * Check if the current tenant has workflows
+ *
+ * @return bool True if the tenant has workflows, false otherwise.
+ */
+function tam_current_tenant_has_workflows() {
+    static $has_workflows = null;
+
+    if ( null !== $has_workflows ) {
+        return $has_workflows;
+    }
+
+    $auth_data = tam_get_current_user_tenant_data();
+    if ( $auth_data ) {
+        $tenant_id = intval( $auth_data['tenant_id'] );
+        $flows = get_post_meta( $tenant_id, 'flows', true );
+        if ( $flows ) {
+            $flow_ids = is_array( $flows ) ? array_map( 'intval', $flows ) : array( intval( $flows ) );
+            $has_workflows = ! empty( $flow_ids );
+            return $has_workflows;
+        }
+    }
+    $has_workflows = false;
+    return false;
+}

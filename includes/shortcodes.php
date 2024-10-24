@@ -58,13 +58,8 @@ function tam_email_entry_form() {
                         'expiration' => $expiration,
                     );
 
-                    // Log token generation and transient setting for debugging
-                    error_log( 'Generated token: ' . $token . ' for email: ' . $email );
-                    if ( set_transient( 'tam_email_token_' . $token, $data, 24 * HOUR_IN_SECONDS ) ) {
-                        error_log( 'Transient set for token: ' . $token );
-                    } else {
-                        error_log( 'Failed to set transient for token: ' . $token );
-                    }
+                    // Set transient for token
+                    set_transient( 'tam_email_token_' . $token, $data, 24 * HOUR_IN_SECONDS );
 
                     // Generate the confirmation link
                     $confirm_link = add_query_arg( array( 'tam_confirm_email' => $token ), site_url( '/login/' ) );
@@ -80,12 +75,6 @@ function tam_email_entry_form() {
 
                     // Send transactional email via Customer.io
                     tam_send_transactional_email( $email, $transactional_template_id, $email_data );
-
-                    // Log that the email was sent
-                    error_log( 'Magic login link sent to email: ' . $email );
-                } else {
-                    // User does not exist, do not send email
-                    error_log( 'No user account associated with email: ' . $email . '. Magic link not sent.' );
                 }
 
                 // Inform the user that a confirmation link has been sent (regardless of whether it was)
@@ -95,9 +84,6 @@ function tam_email_entry_form() {
                 // No tenant found for the email or domain
                 // Inform the user that a confirmation link has been sent (regardless of whether it was)
                 $output .= '<p>If your email is registered, you will receive a confirmation link shortly.</p>';
-
-                // Log for debugging purposes
-                error_log( 'No tenant found for email: ' . $email . '. Magic link not sent.' );
             }
         } else {
             $output .= '<p>Please enter a valid email address.</p>';
@@ -200,33 +186,46 @@ function tam_tenant_name_shortcode( $atts ) {
         'class' => 'tam-tenant-name', // Default CSS class
     ), $atts, 'tam_tenant_name' );
 
-
     // Retrieve authentication data
     $auth_data = tam_get_current_user_tenant_data();
 
     if ( $auth_data ) {
-       
         // Extract and sanitize tenant ID
         $tenant_id = intval( $auth_data['tenant_id'] );
-        
+
         // Retrieve tenant post
         $tenant_post = get_post( $tenant_id );
 
         if ( $tenant_post && 'tenant' === $tenant_post->post_type ) { // Assuming 'tenant' is the post type
             // Get the tenant name (post title)
             $tenant_name = get_the_title( $tenant_id );
-        
+
             // Prepare the HTML output with the tenant name
             $html = '<span class="' . esc_attr( $atts['class'] ) . '">' . esc_html( $tenant_name ) . '</span>';
 
             return $html;
         } else {
-            error_log( 'Tenant post not found or incorrect post type for Tenant ID: ' . $tenant_id );
             return ''; // Optionally, you can return a default message or placeholder
         }
     } else {
-        error_log( 'Authentication failed. User not authenticated or no tenant assigned.' );
         return ''; // Optionally, you can return a default message or placeholder
     }
 }
 add_shortcode( 'tam_tenant_name', 'tam_tenant_name_shortcode' );
+
+/**
+ * Shortcode to conditionally display content if tenant has workflows
+ *
+ * Usage: [tam_show_if_has_workflows]Your content here[/tam_show_if_has_workflows]
+ *
+ * @param array $atts Shortcode attributes.
+ * @param string $content Content enclosed by the shortcode.
+ * @return string Content if condition is met, empty string otherwise.
+ */
+function tam_show_if_has_workflows_shortcode( $atts, $content = null ) {
+    if ( tam_current_tenant_has_workflows() ) {
+        return do_shortcode( $content );
+    }
+    return '';
+}
+add_shortcode( 'tam_show_if_has_workflows', 'tam_show_if_has_workflows_shortcode' );
