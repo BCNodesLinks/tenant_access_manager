@@ -63,18 +63,35 @@ require_once TAM_PLUGIN_DIR . 'includes/access-control.php';
 // Include Toast Notification
 require_once TAM_PLUGIN_DIR . 'includes/toast.php';
 
+// Include User Profile Modifications
+require_once TAM_PLUGIN_DIR . 'includes/user-profile.php';
+
 // Activation and Deactivation Hooks
 function tam_activate_plugin() {
     // Trigger CPT registration on activation
     tam_register_custom_post_types();
     flush_rewrite_rules();
+
+    // Add 'viewer' role
+    add_role(
+        'viewer',
+        __( 'Viewer', 'tenant-access-manager' ),
+        array(
+            'read' => true, // Allows viewing of the site
+        )
+    );
 }
 register_activation_hook( __FILE__, 'tam_activate_plugin' );
 
+
 function tam_deactivate_plugin() {
+    // Remove 'viewer' role
+    remove_role( 'viewer' );
+
     flush_rewrite_rules();
 }
 register_deactivation_hook( __FILE__, 'tam_deactivate_plugin' );
+
 
 // Initialize Plugin
 function tam_initialize_plugin() {
@@ -85,7 +102,7 @@ add_action( 'plugins_loaded', 'tam_initialize_plugin' );
 // Enqueue Auto-Logout Script
 function tam_enqueue_auto_logout_script() {
     // Only enqueue for authenticated users
-    if ( tam_validate_user_authentication() ) {
+    if ( is_user_logged_in() ) {
         // Define the logout URL with nonce
         $login_page = get_page_by_path( 'login' );
         if ( $login_page ) {
@@ -94,7 +111,7 @@ function tam_enqueue_auto_logout_script() {
                 'tam_logout_nonce' => wp_create_nonce( 'tam_logout_action' ),
             ), get_permalink( $login_page->ID ) );
         } else {
-            $logout_url = site_url( '/login/' ); // Fallback URL
+            $logout_url = wp_logout_url(); // Fallback URL
         }
 
         // Enqueue the auto-logout script
@@ -102,20 +119,16 @@ function tam_enqueue_auto_logout_script() {
 
         // Pass the inactivity time and logout URL to the script
         wp_localize_script( 'tam-auto-logout', 'tamSettings', array(
-            'inactivityTime' => 1 * 60 * 1000, // 60 minutes in milliseconds
+            'inactivityTime' => 60 * 60 * 1000, // 60 minutes in milliseconds
             'logoutUrl'      => esc_url_raw( $logout_url ),
         ) );
     }
 }
 add_action( 'wp_enqueue_scripts', 'tam_enqueue_auto_logout_script' );
 
+
 // Log Customer.io Client Initialization
 add_action( 'init', function() {
     $client = tam_get_customerio_client();
-    if ( $client ) {
-        error_log( 'Customer.io client initialized successfully.' );
-    } else {
-        error_log( 'Customer.io client failed to initialize.' );
-    }
 } );
 ?>

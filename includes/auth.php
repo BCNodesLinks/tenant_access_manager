@@ -3,7 +3,7 @@
  * Tenant Access Manager - Authentication Handlers
  *
  * This file handles email confirmation and user logout functionalities,
- * including setting authentication cookies and tracking events with Customer.io.
+ * including generating secure login links and tracking events with Customer.io.
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -21,7 +21,7 @@ require_once plugin_dir_path( __FILE__ ) . 'customerio.php';
  * Handle Email Confirmation
  *
  * Processes the email confirmation link, validates the token,
- * authenticates the user by setting a secure cookie,
+ * authenticates the user by logging them in,
  * updates the customer's profile with tenant information,
  * and tracks the 'email_confirmed' event with Customer.io.
  */
@@ -36,7 +36,7 @@ function tam_handle_email_confirmation() {
         // Retrieve token data from transient storage
         $data = get_transient( 'tam_email_token_' . $token );
         if ( $data ) {
-            error_log( "[TAM_DEBUG] Token valid. Email: {$data['email']}" );
+            error_log( "[TAM_DEBUG] Token valid for user ID: {$data['user_id']}" );
 
             // Delete the transient as it's no longer needed to prevent reuse
             delete_transient( 'tam_email_token_' . $token );
@@ -48,48 +48,19 @@ function tam_handle_email_confirmation() {
                 return;
             }
 
-            // Extract email from the token data
-            $email = $data['email'];
+            // Retrieve user by ID
+            $user_id = $data['user_id'];
+            $user = get_user_by( 'id', $user_id );
 
-            // Try to retrieve tenant ID based on email address
-            $tenant_id = tam_get_tenant_by_email( $email );
+            if ( $user ) {
+                // Log the user in
+                wp_set_current_user( $user_id );
+                wp_set_auth_cookie( $user_id );
 
-            if ( ! $tenant_id ) {
-                // If no tenant found via email, try to retrieve tenant ID based on email domain
-                if ( strpos( $email, '@' ) !== false ) {
-                    list( $user, $domain ) = explode( '@', $email );
-                    $tenant_id = tam_get_tenant_by_domain( $domain );
-                } else {
-                    error_log( "[TAM_DEBUG] Invalid email format: {$email}" );
-                    echo '<p>' . __( 'Invalid email format.', 'tenant-access-manager' ) . '</p>';
-                    return;
-                }
-            }
-
-            if ( $tenant_id ) {
-                // Retrieve Tenant Name based on Tenant ID
-                $tenant_name = tam_get_tenant_name( $tenant_id );
-
-                // Generate a secure authentication token with user and tenant information
-                $token_data = json_encode( array(
-                    'email'        => $email,
-                    'tenant_id'    => $tenant_id,
-                    'tenant_name'  => $tenant_name,
-                    'timestamp'    => time(),
-                ) );
-                $signature = hash_hmac( 'sha256', $token_data, TAM_SECRET_KEY );
-                $auth_token = base64_encode( $token_data . '::' . $signature );
-
-                // Set the authentication cookie with secure parameters
-                setcookie( 'tam_user_token', $auth_token, array(
-                    'expires'  => time() + 3600 * 24 * 30, // 30 days
-                    'path'     => '/',
-                    'secure'   => is_ssl(),
-                    'httponly' => true,
-                    'samesite' => 'Lax',
-                ) );
-
-                error_log( "[TAM_DEBUG] User authenticated. Email: {$email}, Tenant ID: {$tenant_id}, Tenant Name: {$tenant_name}" );
+                // Retrieve tenant information
+                $email        = $user->user_email;
+                $tenant_id    = get_user_meta( $user_id, 'tenant_id', true );
+                $tenant_name  = tam_get_tenant_name( $tenant_id );
 
                 /**
                  * Update the customer's profile with Tenant ID and Tenant Name in Customer.io.
@@ -110,9 +81,9 @@ function tam_handle_email_confirmation() {
                 wp_redirect( site_url( '/portal/' ) );
                 exit;
             } else {
-                // Log and display an error if no tenant is found for the email or domain
-                error_log( "[TAM_DEBUG] No tenant found for email: {$email}" );
-                echo '<p>' . __( 'No tenant found for your email.', 'tenant-access-manager' ) . '</p>';
+                // Log and display an error if the user is not found
+                error_log( "[TAM_DEBUG] User not found for user ID: {$user_id}" );
+                echo '<p>' . __( 'User not found.', 'tenant-access-manager' ) . '</p>';
             }
         } else {
             // Log and display an error if the token is invalid or expired
@@ -126,7 +97,7 @@ add_action( 'template_redirect', 'tam_handle_email_confirmation' );
 /**
  * Logout Handler
  *
- * Handles user logout by clearing the authentication cookie
+ * Handles user logout by clearing the authentication cookies
  * and tracking the logout event with Customer.io.
  */
 function tam_handle_logout() {
@@ -134,16 +105,16 @@ function tam_handle_logout() {
         // Verify nonce to ensure the logout request is legitimate
         if ( isset( $_GET['tam_logout_nonce'] ) && wp_verify_nonce( $_GET['tam_logout_nonce'], 'tam_logout_action' ) ) {
 
-            // Retrieve user data before clearing the cookie
-            $auth_data = tam_validate_user_authentication();
-            if ( $auth_data ) {
-                $email        = $auth_data['email'];
-                $tenant_id    = $auth_data['tenant_id'];
-                $tenant_name  = $auth_data['tenant_name'];
+            // Retrieve user data before logging out
+            if ( is_user_logged_in() ) {
+                $user_id     = get_current_user_id();
+                $email       = wp_get_current_user()->user_email;
+                $tenant_id   = get_user_meta( $user_id, 'tenant_id', true );
+                $tenant_name = tam_get_tenant_name( $tenant_id );
             }
 
-            // Clear the authentication cookie by setting its expiration time in the past
-            setcookie( 'tam_user_token', '', time() - 3600, '/', COOKIE_DOMAIN, is_ssl(), true );
+            // Log the user out
+            wp_logout();
 
             /**
              * Track the 'user_logged_out' event with Customer.io as an identified event.
@@ -160,7 +131,7 @@ function tam_handle_logout() {
             // Redirect the user to the login page after successful logout with auto_logout parameter
             $login_page = get_page_by_path( 'login' );
             if ( $login_page ) {
-                $redirect_url = add_query_arg( 'auto_logout', '1', get_permalink( $login_page->ID ) );
+                //$redirect_url = add_query_arg( 'auto_logout', '1', get_permalink( $login_page->ID ) );
                 wp_redirect( $redirect_url );
                 exit;
             } else {
@@ -178,74 +149,24 @@ function tam_handle_logout() {
 add_action( 'init', 'tam_handle_logout' );
 
 /**
- * Validate User Authentication
+ * Get Current User Tenant Data
  *
- * This function validates the user's authentication token and retrieves user data.
+ * This function retrieves the tenant data for the currently logged-in user.
  *
- * @return array|false Returns user data array if valid, false otherwise.
+ * @return array|false Returns user data array if logged in, false otherwise.
  */
-function tam_validate_user_authentication() {
-    if ( isset( $_COOKIE['tam_user_token'] ) ) {
-        $auth_token = $_COOKIE['tam_user_token'];
-        $decoded    = base64_decode( $auth_token );
+function tam_get_current_user_tenant_data() {
+    if ( is_user_logged_in() ) {
+        $user_id = get_current_user_id();
+        $email = wp_get_current_user()->user_email;
+        $tenant_id = get_user_meta( $user_id, 'tenant_id', true );
+        $tenant_name = tam_get_tenant_name( $tenant_id );
 
-        if ( $decoded ) {
-            error_log( "[TAM_DEBUG] Decoded authentication token successfully." );
-
-            // Ensure the token contains both data and signature
-            if ( strpos( $decoded, '::' ) !== false ) {
-                list( $token_data, $signature ) = explode( '::', $decoded );
-
-                // Verify the signature
-                $expected_signature = hash_hmac( 'sha256', $token_data, TAM_SECRET_KEY );
-                if ( hash_equals( $expected_signature, $signature ) ) {
-                    error_log( "[TAM_DEBUG] Authentication token signature verified." );
-
-                    $data = json_decode( $token_data, true );
-
-                    if ( is_array( $data ) && isset( $data['email'], $data['tenant_id'], $data['tenant_name'] ) ) {
-                        $email     = $data['email'];
-                        $tenant_id = intval( $data['tenant_id'] );
-
-                        // Re-validate the user's email against the tenant's allowed emails or domains
-                        $access_type = get_post_meta( $tenant_id, '_tam_tenant_access_type', true );
-                        if ( 'email' === $access_type ) {
-                            $allowed_emails = get_post_meta( $tenant_id, '_tam_tenant_emails', false );
-                            if ( in_array( strtolower( $email ), array_map( 'strtolower', $allowed_emails ), true ) ) {
-                                return $data;
-                            } else {
-                                error_log( "[TAM_DEBUG] Email {$email} not allowed for Tenant ID {$tenant_id}." );
-                                return false;
-                            }
-                        } else {
-                            if ( strpos( $email, '@' ) !== false ) {
-                                list( $user, $domain ) = explode( '@', $email );
-                                $allowed_domains = get_post_meta( $tenant_id, '_tam_tenant_domains', false );
-                                if ( in_array( strtolower( $domain ), array_map( 'strtolower', $allowed_domains ), true ) ) {
-                                    return $data;
-                                } else {
-                                    error_log( "[TAM_DEBUG] Domain {$domain} not allowed for Tenant ID {$tenant_id}." );
-                                    return false;
-                                }
-                            } else {
-                                error_log( "[TAM_DEBUG] Invalid email format: {$email}" );
-                                return false;
-                            }
-                        }
-                    } else {
-                        error_log( "[TAM_DEBUG] Authentication data missing required fields." );
-                    }
-                } else {
-                    error_log( "[TAM_DEBUG] Authentication token signature mismatch." );
-                }
-            } else {
-                error_log( "[TAM_DEBUG] Authentication token format invalid. Missing '::' separator." );
-            }
-        } else {
-            error_log( "[TAM_DEBUG] Failed to decode authentication token." );
-        }
-    } else {
-        error_log( "[TAM_DEBUG] Authentication cookie 'tam_user_token' not found." );
+        return array(
+            'email'       => $email,
+            'tenant_id'   => $tenant_id,
+            'tenant_name' => $tenant_name,
+        );
     }
 
     return false;

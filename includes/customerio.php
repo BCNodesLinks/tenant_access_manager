@@ -40,7 +40,6 @@ function tam_get_customerio_client() {
             $client->setAppAPIKey( $app_key );
         }
 
-        error_log( "[TAM_DEBUG] Customer.io client initialized successfully." );
         return $client;
     } catch ( Exception $e ) {
         error_log( "[TAM_DEBUG] Customer.io Initialization Exception: " . $e->getMessage() );
@@ -83,15 +82,13 @@ function tam_update_customerio_profile( $email, $tenant_id, $tenant_name ) {
 /**
  * Track Customer.io Event
  *
- * Tracks an event for a customer, identified by email or anonymous ID.
+ * Tracks an event for a customer, identified by email.
  *
- * @param string      $email         The customer's email address.
- * @param string      $event_name    The name of the event.
- * @param array       $data          Additional data for the event.
- * @param bool        $anonymous     Whether the event is anonymous.
- * @param string|null $anonymous_id  The anonymous ID if the event is anonymous.
+ * @param string $email         The customer's email address.
+ * @param string $event_name    The name of the event.
+ * @param array  $data          Additional data for the event.
  */
-function tam_track_customerio_event( $email, $event_name, $data = array(), $anonymous = false, $anonymous_id = null ) {
+function tam_track_customerio_event( $email, $event_name, $data = array() ) {
     $client = tam_get_customerio_client();
     if ( ! $client ) {
         error_log( "[TAM_DEBUG] Customer.io client not available. Cannot track event." );
@@ -103,35 +100,19 @@ function tam_track_customerio_event( $email, $event_name, $data = array(), $anon
         $prefixed_event_name = 'portal_' . $event_name;
         error_log( "[TAM_DEBUG] Preparing to send event '{$prefixed_event_name}' for Email: {$email}" );
 
-        if ( ! $anonymous ) {
-            if ( ! is_email( $email ) ) {
-                error_log( "[TAM_DEBUG] Customer.io Tracking Error: Invalid email provided for identified event." );
-                return;
-            }
-
-            // Track identified event using the customer's email
-            $response = $client->customers->event( array(
-                'id'   => $email, // Using email as identifier
-                'name' => $prefixed_event_name,
-                'data' => $data,
-            ) );
-
-            error_log( "[TAM_DEBUG] Tracked identified event '{$prefixed_event_name}' for {$email} with data: " . json_encode( $data ) . ". Response: " . print_r( $response, true ) );
-        } else {
-            if ( empty( $anonymous_id ) ) {
-                error_log( "[TAM_DEBUG] Customer.io Tracking Error: anonymous_id is required for anonymous events." );
-                return;
-            }
-
-            // Track anonymous event with a unique anonymous_id
-            $response = $client->events->anonymous( array(
-                'name'         => $prefixed_event_name,
-                'data'         => $data,
-                'anonymous_id' => $anonymous_id,
-            ) );
-
-            error_log( "[TAM_DEBUG] Tracked anonymous event '{$prefixed_event_name}' with anonymous_id '{$anonymous_id}' and data: " . json_encode( $data ) . ". Response: " . print_r( $response, true ) );
+        if ( ! is_email( $email ) ) {
+            error_log( "[TAM_DEBUG] Customer.io Tracking Error: Invalid email provided for identified event." );
+            return;
         }
+
+        // Track identified event using the customer's email
+        $response = $client->customers->event( array(
+            'id'   => $email, // Using email as identifier
+            'name' => $prefixed_event_name,
+            'data' => $data,
+        ) );
+
+        error_log( "[TAM_DEBUG] Tracked identified event '{$prefixed_event_name}' for {$email} with data: " . json_encode( $data ) . ". Response: " . print_r( $response, true ) );
     } catch ( Exception $e ) {
         error_log( "[TAM_DEBUG] Customer.io Tracking Error: " . $e->getMessage() );
     }
@@ -185,61 +166,6 @@ function tam_send_transactional_email( $email, $template_id, $data = array() ) {
 
         // Log the response for debugging
         error_log( "[TAM_DEBUG] Sent transactional email using template '{$template_id}' to {$email} with data: " . json_encode( $data ) );
-        error_log( "[TAM_DEBUG] Transactional Email Response: " . print_r( $response, true ) );
-    } catch ( Exception $e ) {
-        error_log( "[TAM_DEBUG] Customer.io Transactional Email Error: " . $e->getMessage() );
-    }
-}
-
-/**
- * Send Transactional Email via Customer.io (Alternative Method)
- *
- * This function is an alternative method in case you need to specify an anonymous ID.
- *
- * @param string $email        The recipient's email address.
- * @param string $template_id  The ID of the transactional email template.
- * @param string $anonymous_id The anonymous ID for the event.
- * @param array  $data         Additional data to populate the email template.
- */
-function tam_send_transactional_email_anonymous( $email, $template_id, $anonymous_id, $data = array() ) {
-    $client = tam_get_customerio_client();
-    if ( ! $client ) {
-        error_log( "[TAM_DEBUG] Customer.io client not available. Cannot send transactional email." );
-        return;
-    }
-
-    try {
-        // Check if 'send' endpoint is initialized
-        if ( ! method_exists( $client, 'send' ) ) {
-            error_log( "[TAM_DEBUG] Customer.io Send endpoint is not initialized." );
-            return;
-        }
-
-        if ( ! is_email( $email ) ) {
-            error_log( "[TAM_DEBUG] Customer.io Transactional Email Error: Invalid email address." );
-            return;
-        }
-
-        error_log( "[TAM_DEBUG] Attempting to send transactional email (Anonymous) using template ID '{$template_id}' to {$email}." );
-
-        // Prepare the payload for transactional email with 'identifiers'
-        $payload = array(
-            'to'                       => $email,
-            'transactional_message_id' => $template_id,
-            'message_data'             => $data,
-            'identifiers'              => array(
-                'email' => $email, // Associate the email with the customer
-            ),
-        );
-
-        // Log the payload being sent
-        error_log( "[TAM_DEBUG] Transactional Email Payload (Anonymous): " . json_encode( $payload ) );
-
-        // Send transactional email
-        $response = $client->send()->email( $payload );
-
-        // Log the response for debugging
-        error_log( "[TAM_DEBUG] Sent transactional email (Anonymous) using template '{$template_id}' to {$email} with data: " . json_encode( $data ) );
         error_log( "[TAM_DEBUG] Transactional Email Response: " . print_r( $response, true ) );
     } catch ( Exception $e ) {
         error_log( "[TAM_DEBUG] Customer.io Transactional Email Error: " . $e->getMessage() );
